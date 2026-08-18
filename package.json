@@ -1,0 +1,14 @@
+{
+  "name": "mango-tracker",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=26.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}
