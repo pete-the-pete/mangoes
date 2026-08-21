@@ -13,6 +13,9 @@ This repo contains two things, deliberately kept separate:
 Read this file at the start of every session. It stays intentionally short — mode detailed docs
 lives in `docs/`. Update the relevant doc (not this file) as decisions get made.
 
+- Product/design specs live in `docs/specs/`, implementation plans in `docs/plans/` — not under
+  `docs/superpowers/`, which is a skill-default path that doesn't match this repo's convention.
+
 ---
 
 ## 1. Architecture boundary (non-negotiable)
