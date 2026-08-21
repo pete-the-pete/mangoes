@@ -2,8 +2,7 @@
   "name": "mango-tracker",
   "private": true,
   "workspaces": [
-    "packages/*",
-    "apps/*"
+    "packages/*"
   ],
   "engines": {
     "node": ">=26.7.0"

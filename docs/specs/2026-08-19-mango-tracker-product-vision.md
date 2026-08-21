@@ -143,7 +143,7 @@ Group stats are a **derived view over the append-only event log**, not pushed st
 
 **Product identity**
 - [ ] `packages/core` ships as a generic, domain-agnostic library with no mango/app-specific concepts baked in (per architecture boundary in root CLAUDE.md)
-- [ ] `apps/mangoes` skins core hard with Mango/Mexico/beach/tropics visual identity — this is the primary differentiator of v1 and should not read as a generic themed template
+- [ ] `packages/web` skins core hard with Mango/Mexico/beach/tropics visual identity — this is the primary differentiator of v1 and should not read as a generic themed template
 - [ ] Installable PWA, mobile-first responsive layout, usable one-handed
 
 ### Should Have (v1 if time, else v1.1)
