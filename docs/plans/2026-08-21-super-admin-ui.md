@@ -89,7 +89,7 @@ that) or any of Tasks 1–10.
 - Produces: `runMigrations(pool: Pool): Promise<void>` — later tasks' tests rely on the
   `user_roles` table existing in the local test database before they run.
 
-- [ ] **Step 1: Write `docker-compose.yml`**
+- [x] **Step 1: Write `docker-compose.yml`**
 
 ```yaml
 services:
@@ -114,12 +114,12 @@ volumes:
   postgres_data:
 ```
 
-- [ ] **Step 2: Start it and verify it's healthy**
+- [x] **Step 2: Start it and verify it's healthy**
 
 Run: `docker compose up -d && docker compose ps`
 Expected: `postgres` service shows `healthy` within ~10s.
 
-- [ ] **Step 3: Write `.env.example`**
+- [x] **Step 3: Write `.env.example`**
 
 ```
 DATABASE_URL=postgresql://mango:mango@localhost:5432/mango_tracker
@@ -128,12 +128,12 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 SUPER_ADMIN_EMAILS=you@gmail.com
 ```
 
-- [ ] **Step 4: Copy it to a real `.env` for local dev**
+- [x] **Step 4: Copy it to a real `.env` for local dev**
 
 Run: `cp .env.example .env`
 Expected: `.env` exists (already gitignored — confirmed in `.gitignore`'s `.env*.local` / `.env` entries).
 
-- [ ] **Step 5: Write the schema**
+- [x] **Step 5: Write the schema**
 
 ```sql
 -- packages/core/src/db/schema.sql
@@ -145,7 +145,7 @@ CREATE TABLE IF NOT EXISTS user_roles (
 );
 ```
 
-- [ ] **Step 6: Write the migration runner**
+- [x] **Step 6: Write the migration runner**
 
 ```ts
 // packages/core/src/db/migrate.ts
@@ -165,7 +165,7 @@ export async function runMigrations(pool: Pool): Promise<void> {
 }
 ```
 
-- [ ] **Step 7: Write the manual migration script**
+- [x] **Step 7: Write the manual migration script**
 
 ```ts
 // packages/core/scripts/migrate.ts
@@ -192,23 +192,23 @@ main().catch((err) => {
 });
 ```
 
-- [ ] **Step 8: Add dependencies and a migrate script to `packages/core/package.json`**
+- [x] **Step 8: Add dependencies and a migrate script to `packages/core/package.json`**
 
 Add to `dependencies`: `"pg": "^8.13.0"`
 Add to `devDependencies`: `"@types/pg": "^8.11.0"`, `"tsx": "^4.19.0"`
 Add to `scripts`: `"migrate": "tsx scripts/migrate.ts"`
 
-- [ ] **Step 9: Install and run the migration against local Postgres**
+- [x] **Step 9: Install and run the migration against local Postgres**
 
 Run: `npm install && set -a && source .env && set +a && npm run migrate -w core`
 Expected: prints `Migrations applied.`
 
-- [ ] **Step 10: Verify the table exists**
+- [x] **Step 10: Verify the table exists**
 
 Run: `docker compose exec postgres psql -U mango -d mango_tracker -c '\d user_roles'`
 Expected: shows the `user_roles` table with columns `clerk_user_id`, `role`, `created_at`, `updated_at`.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add docker-compose.yml .env.example packages/core/src/db packages/core/scripts packages/core/package.json package-lock.json
