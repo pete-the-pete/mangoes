@@ -66,7 +66,7 @@ Compose Postgres and does not depend on this ticket.
 **Not agent-executable — requires Vercel project settings access.**
 
 - Set `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (from Ticket E1), `DATABASE_URL`
-  (from Ticket E2), and `SUPER_ADMIN_EMAILS` (comma-separated list, e.g. your own gmail address) in
+  (from Ticket E2), and `ULTRA_ADMIN_EMAIL` (a single gmail address — yours) in
   the Vercel project's environment variables.
 
 **Depends on:** Ticket E1, Ticket E2.
@@ -123,10 +123,12 @@ Expected: `postgres` service shows `healthy` within ~10s.
 
 ```
 DATABASE_URL=postgresql://mango:mango@localhost:5432/mango_tracker
-CLERK_SECRET_KEY=
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-SUPER_ADMIN_EMAILS=you@gmail.com
 ```
+
+Local-only values only. `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`,
+and `ULTRA_ADMIN_EMAIL` are Development-scoped in Vercel and arrive via
+`vercel env pull` — duplicating them here as blanks risks the empty copy
+shadowing the real one.
 
 - [x] **Step 4: Copy it to a real `.env` for local dev**
 
@@ -899,10 +901,11 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { resolveRole, type Role, type UserRoleStore } from "core";
 import { userRoleStore } from "./db.js";
 
-const SUPER_ADMIN_EMAILS = (process.env.SUPER_ADMIN_EMAILS ?? "")
-  .split(",")
-  .map((email) => email.trim())
-  .filter(Boolean);
+// One bootstrap admin, not a list. `core`'s resolveRole keeps a general
+// `bootstrapEmails: string[]` interface; the app is what decides there is
+// exactly one, so core stays domain-agnostic.
+const ULTRA_ADMIN_EMAIL = process.env.ULTRA_ADMIN_EMAIL?.trim() ?? "";
+const BOOTSTRAP_EMAILS = ULTRA_ADMIN_EMAIL ? [ULTRA_ADMIN_EMAIL] : [];
 
 export async function getCurrentUserRole(
   store: UserRoleStore = userRoleStore,
@@ -922,7 +925,7 @@ export async function getCurrentUserRole(
   const role = await resolveRole(store, {
     clerkUserId: userId,
     email,
-    bootstrapEmails: SUPER_ADMIN_EMAILS,
+    bootstrapEmails: BOOTSTRAP_EMAILS,
     intendedRoleFromInvitation,
   });
 
