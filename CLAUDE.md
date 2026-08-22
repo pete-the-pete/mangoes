@@ -69,3 +69,40 @@ Lean hard on agents and skills rather than repeating manual work. Default postur
   owning skill**, not hand-edited ad hoc once that skill exists — e.g. once a PM
   skill exists, product/domain decisions should flow through it and land in
   `docs/domain-model.md`.
+
+---
+
+## 4. Work tracking — GitHub Issues & Projects
+
+Repo: `pete-the-pete/mangoes`. Track work through GitHub, not just commits — the goal
+is that anyone (including a future session with no memory of this one) can look at the
+Project board and know exactly what's in flight, what's next, and why.
+
+- **The Project board is #6 ("Mangoes"),** https://github.com/users/pete-the-pete/projects/6.
+  This is the *only* board for this repo — **check `gh project list --owner pete-the-pete`
+  before ever running `gh project create`**; a prior session (and a later one) both
+  created stray duplicate boards (#7, #8) by not checking first, and both had to be
+  deleted. Don't repeat that.
+- **Every spec/plan becomes an Issue before implementation starts.** A doc in
+  `docs/specs/` or `docs/plans/` is the detailed write-up; the Issue is the tracked,
+  status-having pointer to it. Link both directions (Issue references the doc path;
+  the doc can reference the Issue number once it exists).
+- **Issues live on Project #6**, moved through status columns (Backlog → Ready →
+  In Progress → In Review → Done) as work proceeds. Don't let issues pile up
+  unassigned to it.
+- **Work happens on branches + PRs linked to their Issue** (`Closes #N` in the PR
+  body), not direct commits to `main` — once the board exists, a merge is what moves
+  an item to Done, not a manual drag.
+- **Tooling:**
+  - `gh` CLI is the default for day-to-day issue/PR/project work
+    (`gh issue create`, `gh pr create`, `gh project item-add`, etc.). Requires
+    `gh auth login -h github.com` — check `gh auth status` first if a command 401s.
+  - The GitHub MCP server (`github@claude-plugins-official` plugin, already
+    installed) is available for anything `gh` handles poorly — bulk project-field
+    updates, custom GraphQL queries, cross-repo views. It needs
+    `GITHUB_PERSONAL_ACCESS_TOKEN` set in the environment to connect
+    (`claude mcp list` shows connection status).
+  - Prefer `gh` for simple CRUD; reach for the MCP server when the task needs
+    structured/bulk data back, not just a fire-and-forget command.
+- Before starting non-trivial work, check whether an Issue already covers it; if not,
+  create one first rather than working untracked.
