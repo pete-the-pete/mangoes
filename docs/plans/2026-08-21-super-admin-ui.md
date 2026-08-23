@@ -50,10 +50,30 @@ links to the tasks listed, rather than folding them into a code task.
 **Not agent-executable — requires the Clerk dashboard.**
 
 - Create a Clerk application (or use an existing one).
-- Enable Google as a social connection; disable email/password and any other sign-in method so
-  Google is the only path (matches spec: "Google OAuth only").
+- Enable Google as a social connection, and turn **off "sign-in with email"** so Google is the only
+  way to log in (matches spec: "Google OAuth only").
+- **Leave "sign-up with email" ON.** This is the trap: "disable every non-Google sign-in method"
+  reads like it means disabling the email attribute outright, and doing that breaks three things at
+  once. In Clerk's data model these are separate flags —
+  `email_address.enabled` (sign-up) vs `email_address.used_for_first_factor` (sign-in) — and the
+  configuration this project needs is `enabled=true, used_for_first_factor=false`.
+
+  With `enabled=false`: Clerk refuses to create invitations at all ("Invitations are only supported
+  on instances that accept email addresses"), which blocks **Task 8** entirely; the user carries no
+  email, so `SUPER_ADMIN_EMAIL` never matches in `resolveRole` and the bootstrap owner silently
+  resolves to `member`; and the spec's gmail-only invite rule has nothing to validate against.
+
+  Verify with:
+  ```sh
+  curl -s "https://<your-frontend-api>/v1/environment?__clerk_api_version=2021-02-05&_clerk_js_version=5" \
+    | jq '.user_settings.attributes.email_address | {enabled, used_for_first_factor}'
+  ```
+  Expected: `{"enabled": true, "used_for_first_factor": false}`.
 - Enable "Restricted" sign-up mode (invite-only) in Clerk's dashboard so unsolicited sign-ups are
   rejected at the auth layer, not just hidden in the UI.
+- **Bootstrapping the first owner is a chicken-and-egg problem** — Restricted mode blocks self-serve
+  sign-up, and the invite endpoint that would solve it is Task 8. Note that sign-up mode is
+  dashboard-only; `PATCH /v1/instance` exposes allowlist/blocklist settings but not sign-up mode.
 - Copy the publishable key and secret key somewhere you can paste into `.env` locally.
 
 **Blocks:** Task 5 (Clerk SDK install/config — needs real keys to run the dev server end-to-end),
