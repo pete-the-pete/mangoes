@@ -232,7 +232,7 @@ git commit -m "infra: add local Postgres via Docker Compose and user_roles schem
 **Interfaces:**
 - Produces: `type Role = "owner" | "admin" | "member"`; `interface UserRoleRecord { clerkUserId: string; role: Role; createdAt: Date; updatedAt: Date }`; `wouldRemoveLastOwner(currentRoles: Pick<UserRoleRecord, "clerkUserId" | "role">[], targetUserId: string, newRole: Role): boolean`. Later tasks (3, 4, and web Tasks 6–9) import all three from `core`.
 
-- [ ] **Step 1: Add Vitest to `packages/core`**
+- [x] **Step 1: Add Vitest to `packages/core`**
 
 Add to `devDependencies`: `"vitest": "^2.1.0"`
 Add to `scripts`: `"test": "vitest run"`
@@ -248,7 +248,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 2: Write the `Role` and `UserRoleRecord` types**
+- [x] **Step 2: Write the `Role` and `UserRoleRecord` types**
 
 ```ts
 // packages/core/src/roles/types.ts
@@ -262,7 +262,7 @@ export interface UserRoleRecord {
 }
 ```
 
-- [ ] **Step 3: Write the failing test for the last-owner guard**
+- [x] **Step 3: Write the failing test for the last-owner guard**
 
 ```ts
 // packages/core/src/roles/lastOwnerGuard.test.ts
@@ -300,12 +300,12 @@ describe("wouldRemoveLastOwner", () => {
 });
 ```
 
-- [ ] **Step 4: Run it to verify it fails**
+- [x] **Step 4: Run it to verify it fails**
 
 Run: `npm run test -w core`
 Expected: FAIL — `lastOwnerGuard.ts` does not exist.
 
-- [ ] **Step 5: Implement the guard**
+- [x] **Step 5: Implement the guard**
 
 ```ts
 // packages/core/src/roles/lastOwnerGuard.ts
@@ -325,12 +325,12 @@ export function wouldRemoveLastOwner(
 }
 ```
 
-- [ ] **Step 6: Run it to verify it passes**
+- [x] **Step 6: Run it to verify it passes**
 
 Run: `npm run test -w core`
 Expected: PASS — 5 tests.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/core/src/roles/types.ts packages/core/src/roles/lastOwnerGuard.ts packages/core/src/roles/lastOwnerGuard.test.ts packages/core/vitest.config.ts packages/core/package.json package-lock.json
@@ -350,7 +350,7 @@ git commit -m "feat(core): add Role types and last-owner guard"
   from Task 1 to exist in the database the tests connect to.
 - Produces: `interface UserRoleStore { getRole(clerkUserId: string): Promise<Role | undefined>; upsertRole(clerkUserId: string, role: Role): Promise<void>; listRoles(): Promise<UserRoleRecord[]> }`; `createPostgresUserRoleStore(pool: Pool): UserRoleStore`. Task 4 and all web tasks (6–9) depend on this interface shape.
 
-- [ ] **Step 1: Write the failing test (against real local Postgres)**
+- [x] **Step 1: Write the failing test (against real local Postgres)**
 
 ```ts
 // packages/core/src/roles/userRoleStore.test.ts
@@ -402,12 +402,12 @@ describe("createPostgresUserRoleStore", () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `set -a && source .env && set +a && npm run test -w core`
 Expected: FAIL — `userRoleStore.ts` does not exist.
 
-- [ ] **Step 3: Implement the store**
+- [x] **Step 3: Implement the store**
 
 ```ts
 // packages/core/src/roles/userRoleStore.ts
@@ -464,12 +464,12 @@ export function createPostgresUserRoleStore(pool: Pool): UserRoleStore {
 }
 ```
 
-- [ ] **Step 4: Run it to verify it passes**
+- [x] **Step 4: Run it to verify it passes**
 
 Run: `set -a && source .env && set +a && npm run test -w core`
 Expected: PASS — 4 new tests (9 total).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/roles/userRoleStore.ts packages/core/src/roles/userRoleStore.test.ts
@@ -490,7 +490,7 @@ git commit -m "feat(core): add Postgres-backed user role store"
 - Consumes: `UserRoleStore`, `Role` from Task 3.
 - Produces: `interface ResolveRoleInput { clerkUserId: string; email: string; bootstrapEmails: string[]; intendedRoleFromInvitation?: Role }`; `resolveRole(store: UserRoleStore, input: ResolveRoleInput): Promise<Role>`. Web Task 6's `getCurrentUserRole` depends on this exact signature.
 
-- [ ] **Step 1: Write the failing test with an in-memory fake store**
+- [x] **Step 1: Write the failing test with an in-memory fake store**
 
 ```ts
 // packages/core/src/roles/resolveRole.test.ts
@@ -566,12 +566,12 @@ describe("resolveRole", () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `npm run test -w core`
 Expected: FAIL — `resolveRole.ts` does not exist.
 
-- [ ] **Step 3: Implement `resolveRole`**
+- [x] **Step 3: Implement `resolveRole`**
 
 ```ts
 // packages/core/src/roles/resolveRole.ts
@@ -608,12 +608,12 @@ export async function resolveRole(
 }
 ```
 
-- [ ] **Step 4: Run it to verify it passes**
+- [x] **Step 4: Run it to verify it passes**
 
 Run: `npm run test -w core`
 Expected: PASS — 4 new tests (13 total).
 
-- [ ] **Step 5: Add the barrel export**
+- [x] **Step 5: Add the barrel export**
 
 ```ts
 // packages/core/src/roles/index.ts
@@ -628,12 +628,12 @@ export * from "./resolveRole.js";
 export * from "./roles/index.js";
 ```
 
-- [ ] **Step 6: Build core to confirm the exports compile**
+- [x] **Step 6: Build core to confirm the exports compile**
 
 Run: `npm run build -w core`
 Expected: succeeds, no type errors.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/core/src/roles/resolveRole.ts packages/core/src/roles/resolveRole.test.ts packages/core/src/roles/index.ts packages/core/src/index.ts
