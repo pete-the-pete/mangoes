@@ -11,7 +11,7 @@ or Next.js imports. `packages/web` wires Clerk (auth), calls into `core` for rol
 exposes the `/admin` UI plus three route handlers (list, invite, change-role).
 
 **Tech Stack:** Next.js App Router (`packages/web`), plain TypeScript (`packages/core`), Postgres
-via `pg`, Clerk (`@clerk/nextjs`) for auth/invites, Vitest for tests, Docker Compose for local Postgres.
+via `pg`, Clerk (`@clerk/nextjs` v7) for auth/invites, Vitest for tests, Docker Compose for local Postgres.
 
 ## Global Constraints
 
@@ -26,6 +26,11 @@ via `pg`, Clerk (`@clerk/nextjs`) for auth/invites, Vitest for tests, Docker Com
 - Invite email must match `@gmail.com` (case-insensitive) before any Clerk API call is made (spec: API Surface).
 - A role change must never leave zero `owner` users (spec: Must Have, API Surface).
 - No E2E/browser tests in this slice (spec: Testing) — UI tasks are manually verified via the dev server.
+- `packages/core` uses `.js` import extensions (NodeNext); `packages/web` uses extensionless
+  relative imports (`./db`) — it is `moduleResolution: bundler`, and Vitest resolves through
+  Vite rather than Next, where `.js`→`.ts` mapping is resolver-specific.
+- `core`'s `main`/`types` point at a gitignored `dist/`, so `npm run build -w core` must precede
+  any `web` build, test, or dev run. Root `npm run build` does both in order.
 
 ---
 
@@ -35,19 +40,44 @@ These block downstream code tasks and require action outside this repo (a dashbo
 service, or an account you control) — file each as its own GitHub issue with explicit "blocks"
 links to the tasks listed, rather than folding them into a code task.
 
+**All three are complete** (issues #3, #4, #5 closed). `packages/web/.env.local` holds
+`CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `SUPER_ADMIN_EMAIL` via
+`vercel env pull`; the local `DATABASE_URL` comes from the repo-root `.env.dev`. The
+"blocks" notes below are kept as a record of the original ordering, not as live blockers.
+
 ### Ticket E1: Create Clerk application with Google OAuth
 
 **Not agent-executable — requires the Clerk dashboard.**
 
 - Create a Clerk application (or use an existing one).
-- Enable Google as a social connection; disable email/password and any other sign-in method so
-  Google is the only path (matches spec: "Google OAuth only").
+- Enable Google as a social connection, and turn **off "sign-in with email"** so Google is the only
+  way to log in (matches spec: "Google OAuth only").
+- **Leave "sign-up with email" ON.** This is the trap: "disable every non-Google sign-in method"
+  reads like it means disabling the email attribute outright, and doing that breaks three things at
+  once. In Clerk's data model these are separate flags —
+  `email_address.enabled` (sign-up) vs `email_address.used_for_first_factor` (sign-in) — and the
+  configuration this project needs is `enabled=true, used_for_first_factor=false`.
+
+  With `enabled=false`: Clerk refuses to create invitations at all ("Invitations are only supported
+  on instances that accept email addresses"), which blocks **Task 8** entirely; the user carries no
+  email, so `SUPER_ADMIN_EMAIL` never matches in `resolveRole` and the bootstrap owner silently
+  resolves to `member`; and the spec's gmail-only invite rule has nothing to validate against.
+
+  Verify with:
+  ```sh
+  curl -s "https://<your-frontend-api>/v1/environment?__clerk_api_version=2021-02-05&_clerk_js_version=5" \
+    | jq '.user_settings.attributes.email_address | {enabled, used_for_first_factor}'
+  ```
+  Expected: `{"enabled": true, "used_for_first_factor": false}`.
 - Enable "Restricted" sign-up mode (invite-only) in Clerk's dashboard so unsolicited sign-ups are
   rejected at the auth layer, not just hidden in the UI.
+- **Bootstrapping the first owner is a chicken-and-egg problem** — Restricted mode blocks self-serve
+  sign-up, and the invite endpoint that would solve it is Task 8. Note that sign-up mode is
+  dashboard-only; `PATCH /v1/instance` exposes allowlist/blocklist settings but not sign-up mode.
 - Copy the publishable key and secret key somewhere you can paste into `.env` locally.
 
 **Blocks:** Task 5 (Clerk SDK install/config — needs real keys to run the dev server end-to-end),
-and by extension every later web task that depends on Task 5's middleware/provider being live.
+and by extension every later web task that depends on Task 5's proxy/provider being live.
 Tasks 1–4 (core logic) and the test-writing parts of Tasks 6–9 do not need this (they mock Clerk).
 
 ### Ticket E2: Provision hosted Postgres for Vercel
@@ -642,85 +672,95 @@ git commit -m "feat(core): add role-resolution function and public exports"
 
 ---
 
-## Task 5: Web — Clerk install, provider, middleware, sign-in page
+## Task 5: Web — Clerk install, provider, sign-in page
+
+**Status: done** (branch `feat/clerk-auth-admin-gate`, issue #10).
 
 **Files:**
-- Modify: `packages/web/package.json`
-- Create: `packages/web/src/middleware.ts`
+- Modify: `packages/web/package.json`, root `package.json`
+- Create: `packages/web/src/proxy.ts`
 - Modify: `packages/web/src/app/layout.tsx`
 - Create: `packages/web/src/app/sign-in/[[...sign-in]]/page.tsx`
 
 **Interfaces:**
 - Produces: authenticated session context available to `auth()`/`clerkClient()` calls in Task 6+.
 
-This task has no automated tests — Clerk's middleware and provider require a live Clerk app to
-exercise meaningfully, and Ticket E1 is the blocker for that. Every step here is code that compiles
-without real keys; the verification steps at the end require Ticket E1 to be complete.
+> **This section was rewritten during implementation.** It was originally drafted against Clerk v6
+> and Next 15 and no longer matched the repo, which is on Next 16.3.1 / React 19.2.8. The
+> corrections are called out inline below; the short version is Clerk **7**, `proxy.ts` instead of
+> `middleware.ts`, and no route-matcher gating at all.
 
-- [ ] **Step 1: Add the Clerk dependency**
+No automated tests — Clerk's proxy and provider need a live Clerk app to exercise meaningfully.
 
-Add to `packages/web/package.json` `dependencies`: `"@clerk/nextjs": "^6.14.0"`
+- [x] **Step 1: Add the Clerk dependency**
 
-Run: `npm install`
+`"@clerk/nextjs": "^7.8.0"` in `packages/web` dependencies.
 
-- [ ] **Step 2: Write the middleware**
+**Not `^6.14.0`.** Clerk 6 does not satisfy Next 16's peer range — `@clerk/nextjs@7` declares
+`next: ... || ^16.1.0-0`, so 6.x will not install against this repo at all.
+
+- [x] **Step 2: Add a root build script**
+
+```json
+"scripts": { "build": "npm run build -w core && npm run build -w web" }
+```
+
+`core`'s `main`/`types` point at a gitignored `dist/`, so `core` must be built before `web` can
+build, test, or run. Every command below assumes `npm run build -w core` has happened.
+
+- [x] **Step 3: Write the proxy**
+
+**`packages/web/src/proxy.ts`, not `src/middleware.ts`.** Next 16 renamed the file convention;
+`middleware` is deprecated.
 
 ```ts
-// packages/web/src/middleware.ts
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+// packages/web/src/proxy.ts
+import { clerkMiddleware } from "@clerk/nextjs/server";
 
-const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
-
-export default clerkMiddleware(async (auth, req) => {
-  if (isAdminRoute(req)) {
-    await auth.protect();
-  }
-});
+export default clerkMiddleware();
 
 export const config = {
-  matcher: ["/((?!_next|.*\\..*).*)"],
+  matcher: [
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/(api|trpc)(.*)",
+    "/__clerk/(.*)",
+  ],
 };
 ```
 
-- [ ] **Step 3: Wrap the root layout in `ClerkProvider`**
+**No `createRouteMatcher`, no `auth.protect()`.** `createRouteMatcher()` is deprecated in Clerk v7
+and logs a runtime deprecation warning; Clerk now advises protecting "as close to the resource as
+possible" rather than by path-matching in middleware. The proxy therefore establishes session
+context and gates nothing.
+
+Use Clerk's recommended matcher verbatim. It must cover **every path that calls `auth()`** —
+`auth()` throws if the proxy did not run for that request — which includes `/admin` and the
+`/admin/api/*` handlers in Tasks 7–9. The originally-drafted `'/((?!_next|.*\\..*).*)'` did not.
+
+- [x] **Step 4: Wrap the layout's `<body>` in `ClerkProvider`**
 
 ```tsx
-// packages/web/src/app/layout.tsx
-import type { Metadata } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-export const metadata: Metadata = {
-  title: "Mango Tracker",
-  description: "Coming soon",
-};
-
+// packages/web/src/app/layout.tsx  (unchanged parts elided)
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <ClerkProvider>
-      <html
-        lang="en"
-        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      >
-        <body className="min-h-full flex flex-col">{children}</body>
-      </html>
-    </ClerkProvider>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
+      <body className="min-h-full flex flex-col">
+        <ClerkProvider>{children}</ClerkProvider>
+      </body>
+    </html>
   );
 }
 ```
 
-- [ ] **Step 4: Add the sign-in page**
+**Inside `<body>`, not wrapping `<html>`** — required by Clerk v7, and it no longer opts the whole
+app into dynamic rendering (`/` still builds as `○ (Static)`). Clerk injects a `<div hidden>` as
+`body`'s first child; because it is `hidden` it does not participate in flex layout, so
+`page.tsx`'s `flex-1` gradient still fills the viewport.
+
+- [x] **Step 5: Add the sign-in page**
 
 ```tsx
 // packages/web/src/app/sign-in/[[...sign-in]]/page.tsx
@@ -729,67 +769,75 @@ import { SignIn } from "@clerk/nextjs";
 export default function SignInPage() {
   return (
     <div className="flex flex-1 items-center justify-center p-6">
-      <SignIn />
+      <SignIn fallbackRedirectUrl="/admin" />
     </div>
   );
 }
 ```
 
-- [ ] **Step 5: Verify it builds**
+`fallbackRedirectUrl` because `<SignIn/>` otherwise lands on `/` after sign-in. Set as a prop
+rather than via `NEXT_PUBLIC_CLERK_SIGN_IN_URL`: `packages/web/.env.local` is `vercel env pull`
+output, so a hand-added key there is wiped on the next pull.
 
-Run: `npm run build -w web`
-Expected: succeeds (Clerk components compile even without valid keys set; only runtime calls need real keys).
+- [x] **Step 6: Verify it builds**
 
-- [ ] **Step 6: Manual verification (requires Ticket E1 complete and real keys in `.env`)**
+Run: `npm run build`
+Expected: succeeds; route table lists `ƒ /sign-in/[[...sign-in]]` and `ƒ Proxy (Middleware)`.
 
-Run: `npm run dev -w web`, visit `http://localhost:3000/admin`
-Expected: redirected to `/sign-in`, Google sign-in button visible, no other sign-in methods shown.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add packages/web/package.json package-lock.json packages/web/src/middleware.ts packages/web/src/app/layout.tsx packages/web/src/app/sign-in
-git commit -m "feat(web): add Clerk auth, middleware, and sign-in page"
-```
+- [x] **Step 7: Commit**
 
 ---
 
 ## Task 6: Web — auth helpers + admin role gate
+
+**Status: done** (branch `feat/clerk-auth-admin-gate`, issue #11).
 
 **Files:**
 - Create: `packages/web/src/lib/db.ts`
 - Create: `packages/web/src/lib/auth.ts`
 - Test: `packages/web/src/lib/auth.test.ts`
 - Create: `packages/web/src/app/admin/layout.tsx`
+- Create: `packages/web/src/app/admin/page.tsx`
+- Create: `packages/web/vitest.config.mts`
+- Create: `packages/web/scripts/dev.mjs`
 - Modify: `packages/web/package.json`
-- Create: `packages/web/vitest.config.ts`
 
 **Interfaces:**
 - Consumes: `createPostgresUserRoleStore`, `resolveRole`, `Role`, `UserRoleStore` from `core` (Tasks 2–4).
-- Produces: `getCurrentUserRole(store?: UserRoleStore): Promise<{ clerkUserId: string; role: Role } | null>`; `requireRole(allowed: Role[], store?: UserRoleStore): Promise<{ ok: boolean; status: number; error?: string; role?: Role; clerkUserId?: string }>`. Tasks 7–9's route handlers depend on `requireRole`'s exact return shape.
+- Produces: `getCurrentUserRole(store?: UserRoleStore): Promise<{ clerkUserId: string; role: Role } | null>`; `requireRole(allowed: Role[], store?: UserRoleStore): Promise<RoleGuardResult>`. Tasks 7–9's route handlers depend on `requireRole`'s exact return shape.
 
-- [ ] **Step 1: Add test tooling to `packages/web`**
+> **Authorization boundary — read before writing Tasks 7–9.** Because Task 5 deliberately removed
+> proxy-level gating, `requireRole()` is the *only* thing standing in front of `/admin/api/*`.
+> Route handlers do not run layouts, so `app/admin/layout.tsx` protects the admin **pages** and
+> nothing else. Every handler must call `requireRole()` itself.
 
-Add to `devDependencies`: `"vitest": "^2.1.0"`, `"vite-tsconfig-paths": "^5.1.0"`
-Add to `scripts`: `"test": "vitest run"`
+- [x] **Step 1: Add test tooling to `packages/web`**
+
+Add to `devDependencies`: `"vitest": "^4.1.11"`. Add to `scripts`: `"test": "vitest run"`.
+
+**vitest 4, matching `packages/core`** — not the `^2.1.0` originally drafted; two majors of vitest
+in one tree is avoidable churn.
+
+**No `vite-tsconfig-paths`.** Vite resolves tsconfig `paths` natively now and warns at startup that
+the plugin is redundant.
 
 ```ts
-// packages/web/vitest.config.ts
+// packages/web/vitest.config.mts
 import { defineConfig } from "vitest/config";
-import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
-  test: {
-    environment: "node",
-  },
+  resolve: { tsconfigPaths: true },
+  test: { environment: "node" },
 });
 ```
 
-- [ ] **Step 2: Add `pg` and wire the Postgres-backed store singleton**
+**`.mts`, not `.ts`:** `packages/web` is not `"type": "module"`, so a `.ts` config is loaded as
+CommonJS and Vite warns about the ESM syntax. Unlike `packages/core/vitest.config.ts` this config
+does no env-file layering — these tests inject a fake store and never open a connection.
 
-Add to `dependencies`: `"pg": "^8.13.0"`, `"core": "0.0.0"`
-Add to `devDependencies`: `"@types/pg": "^8.11.0"`
+- [x] **Step 2: Add `pg` and wire the Postgres-backed store singleton**
+
+Add to `dependencies`: `"pg": "^8.13.0"`, `"core": "0.0.0"`; to `devDependencies`: `"@types/pg": "^8.11.0"`.
 
 ```ts
 // packages/web/src/lib/db.ts
@@ -801,138 +849,27 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 export const userRoleStore = createPostgresUserRoleStore(pool);
 ```
 
-- [ ] **Step 3: Write the failing test for `requireRole`**
+**Import convention:** `packages/web` uses **extensionless** relative imports (`./db`), while
+`packages/core` keeps `.js` extensions (it is NodeNext). Web is `moduleResolution: bundler`, and
+Vitest resolves through Vite rather than Next, where `.js`→`.ts` mapping is resolver-specific.
+Extensionless is unambiguous under both.
+
+- [x] **Step 3: Write the failing test for `requireRole`**
+
+`packages/web/src/lib/auth.test.ts` — three cases: 401 when not signed in, 403 when the resolved
+role isn't allowed, `ok: true` when it is. `vi.mock("@clerk/nextjs/server")` for `auth`/`clerkClient`,
+**plus `vi.mock("./db")`** so importing `auth.ts` never constructs a real `pg` Pool. The fake store
+implements `UserRoleStore` from `core`.
+
+- [x] **Step 4: Run it to verify it fails** — `npm run test -w web`, fails on missing `./auth`.
+
+- [x] **Step 5: Implement `packages/web/src/lib/auth.ts`**
+
+`getCurrentUserRole` reads `userId` from `await auth()`, fetches the primary email and
+`publicMetadata.intendedRole` via `await clerkClient()`, and delegates to `core`'s `resolveRole`
+with `bootstrapEmails` derived from `SUPER_ADMIN_EMAIL`. `requireRole` returns:
 
 ```ts
-// packages/web/src/lib/auth.test.ts
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { UserRoleStore } from "core";
-
-vi.mock("@clerk/nextjs/server", () => ({
-  auth: vi.fn(),
-  clerkClient: vi.fn(),
-}));
-
-import { auth, clerkClient } from "@clerk/nextjs/server";
-import { requireRole } from "./auth.js";
-
-function fakeStore(
-  initial: Record<string, "owner" | "admin" | "member"> = {},
-): UserRoleStore {
-  const roles = new Map(Object.entries(initial));
-  return {
-    async getRole(id) {
-      return roles.get(id);
-    },
-    async upsertRole(id, role) {
-      roles.set(id, role);
-    },
-    async listRoles() {
-      return [...roles.entries()].map(([clerkUserId, role]) => ({
-        clerkUserId,
-        role,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }));
-    },
-  };
-}
-
-describe("requireRole", () => {
-  beforeEach(() => {
-    vi.mocked(auth).mockReset();
-    vi.mocked(clerkClient).mockReset();
-  });
-
-  it("returns 401 when not signed in", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: null } as never);
-    const result = await requireRole(["owner"], fakeStore());
-    expect(result).toEqual({ ok: false, status: 401, error: "Not signed in" });
-  });
-
-  it("returns 403 when the resolved role isn't allowed", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "u1" } as never);
-    vi.mocked(clerkClient).mockResolvedValue({
-      users: {
-        getUser: vi.fn().mockResolvedValue({
-          primaryEmailAddress: { emailAddress: "friend@gmail.com" },
-          publicMetadata: {},
-        }),
-      },
-    } as never);
-    const result = await requireRole(["owner"], fakeStore({ u1: "member" }));
-    expect(result.ok).toBe(false);
-    expect(result.status).toBe(403);
-  });
-
-  it("returns ok: true when the resolved role is allowed", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "u1" } as never);
-    vi.mocked(clerkClient).mockResolvedValue({
-      users: {
-        getUser: vi.fn().mockResolvedValue({
-          primaryEmailAddress: { emailAddress: "pete@gmail.com" },
-          publicMetadata: {},
-        }),
-      },
-    } as never);
-    const result = await requireRole(
-      ["owner", "admin"],
-      fakeStore({ u1: "owner" }),
-    );
-    expect(result).toEqual({
-      ok: true,
-      status: 200,
-      role: "owner",
-      clerkUserId: "u1",
-    });
-  });
-});
-```
-
-- [ ] **Step 4: Run it to verify it fails**
-
-Run: `npm run test -w web`
-Expected: FAIL — `auth.ts` does not exist.
-
-- [ ] **Step 5: Implement `packages/web/src/lib/auth.ts`**
-
-```ts
-// packages/web/src/lib/auth.ts
-import { auth, clerkClient } from "@clerk/nextjs/server";
-import { resolveRole, type Role, type UserRoleStore } from "core";
-import { userRoleStore } from "./db.js";
-
-// One bootstrap admin, not a list. `core`'s resolveRole keeps a general
-// `bootstrapEmails: string[]` interface; the app is what decides there is
-// exactly one, so core stays domain-agnostic.
-const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL?.trim() ?? "";
-const BOOTSTRAP_EMAILS = SUPER_ADMIN_EMAIL ? [SUPER_ADMIN_EMAIL] : [];
-
-export async function getCurrentUserRole(
-  store: UserRoleStore = userRoleStore,
-): Promise<{ clerkUserId: string; role: Role } | null> {
-  const { userId } = await auth();
-  if (!userId) {
-    return null;
-  }
-
-  const clerk = await clerkClient();
-  const user = await clerk.users.getUser(userId);
-  const email = user.primaryEmailAddress?.emailAddress ?? "";
-  const intendedRoleFromInvitation = user.publicMetadata?.intendedRole as
-    | Role
-    | undefined;
-
-  const role = await resolveRole(store, {
-    clerkUserId: userId,
-    email,
-    bootstrapEmails: BOOTSTRAP_EMAILS,
-    intendedRoleFromInvitation,
-  });
-
-  return { clerkUserId: userId, role };
-}
-
 export interface RoleGuardResult {
   ok: boolean;
   status: number;
@@ -940,80 +877,52 @@ export interface RoleGuardResult {
   role?: Role;
   clerkUserId?: string;
 }
-
-export async function requireRole(
-  allowed: Role[],
-  store: UserRoleStore = userRoleStore,
-): Promise<RoleGuardResult> {
-  const current = await getCurrentUserRole(store);
-  if (!current) {
-    return { ok: false, status: 401, error: "Not signed in" };
-  }
-  if (!allowed.includes(current.role)) {
-    return {
-      ok: false,
-      status: 403,
-      error: "Not authorized",
-      role: current.role,
-      clerkUserId: current.clerkUserId,
-    };
-  }
-  return {
-    ok: true,
-    status: 200,
-    role: current.role,
-    clerkUserId: current.clerkUserId,
-  };
-}
 ```
 
-- [ ] **Step 6: Run it to verify it passes**
+`{ ok: false, status: 401, error: "Not signed in" }` when there's no session;
+`{ ok: false, status: 403, error: "Not authorized", role, clerkUserId }` when the role isn't in
+`allowed`; `{ ok: true, status: 200, role, clerkUserId }` otherwise.
 
-Run: `npm run test -w web`
-Expected: PASS — 3 tests.
+Both `auth()` and `clerkClient()` are **async** in Clerk v7 — `await` both.
 
-- [ ] **Step 7: Write the admin role gate**
+- [x] **Step 6: Run it to verify it passes** — `npm run build -w core && npm run test -w web`, 3 tests.
 
-```tsx
-// packages/web/src/app/admin/layout.tsx
-import type { ReactNode } from "react";
-import { redirect } from "next/navigation";
-import { getCurrentUserRole } from "@/lib/auth";
+- [x] **Step 7: Write the admin role gate**
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  const current = await getCurrentUserRole();
-  if (!current) {
-    redirect("/sign-in");
-  }
-  if (current.role !== "owner" && current.role !== "admin") {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-        <h1 className="text-xl font-semibold">Not authorized</h1>
-        <p className="text-sm text-gray-500">
-          Your account does not have access to the admin area.
-        </p>
-      </div>
-    );
-  }
-  return <>{children}</>;
-}
-```
+`packages/web/src/app/admin/layout.tsx` — `getCurrentUserRole()`, `redirect("/sign-in")` when null,
+an inline "Not authorized" block when the role is neither `owner` nor `admin`, otherwise `{children}`.
 
-- [ ] **Step 8: Manual verification (requires Task 5's Ticket E1 keys and a `member`-role test account)**
+- [x] **Step 8: Add a placeholder `admin/page.tsx`**
 
-Sign in as a non-admin gmail account, visit `/admin`.
-Expected: sees the "Not authorized" message, not the user table.
+A bare `layout.tsx` creates no addressable route, so without a `page.tsx` at the same segment
+`/admin` 404s and the gate never runs. A one-line placeholder makes Task 6 verifiable on its own.
+**Task 10 replaces this file.**
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Make `DATABASE_URL` reachable from `next dev`**
 
-```bash
-git add packages/web/src/lib packages/web/src/app/admin/layout.tsx packages/web/package.json package-lock.json packages/web/vitest.config.ts
-git commit -m "feat(web): add role-resolution auth helpers and admin route gate"
-```
+`next dev` reads `.env` files relative to `packages/web`, so it never sees the repo-root `.env.dev`
+where the local `DATABASE_URL` lives. `packages/web/scripts/dev.mjs` layers root `.env.dev` then
+`.env` into `process.env` (a real shell variable still wins) and spawns `next dev`; `"dev"` becomes
+`"node scripts/dev.mjs"`.
+
+It must load them **in JS, not via node's `--env-file-if-exists` flag** the way
+`npm run migrate -w core` does: `next dev` forks a child server and rebuilds `NODE_OPTIONS` from
+the parent's `execArgv`, and node rejects `--env-file-if-exists` inside `NODE_OPTIONS` — the flag
+form dies before the server starts. Also not `process.loadEnvFile`, which inverts precedence when
+called twice (same trap documented in `packages/core/vitest.config.ts`).
+
+Deliberately **not** solved by adding a Development-scoped `DATABASE_URL` in Vercel — `.env.dev`'s
+header records that as an intentional decision.
+
+- [x] **Step 10: Manual verification** — see the branch's PR description; `/` renders, `/admin`
+signed out 307s to `/sign-in`, sign-in offers Google only, and signing in as `SUPER_ADMIN_EMAIL`
+lands on `/admin` with one `owner` row in `user_roles`.
+
+The **non-admin 403 path is not verified in-browser at this point** — Clerk sign-up is Restricted
+and no invite endpoint exists until Task 8, so there is no way to create a `member` account yet.
+It is covered by the Step 3 unit test, and gets its browser check in Task 8.
+
+- [x] **Step 11: Commit**
 
 ---
 
@@ -1039,7 +948,7 @@ import type { UserRoleStore } from "core";
 vi.mock("@clerk/nextjs/server", () => ({ clerkClient: vi.fn() }));
 
 import { clerkClient } from "@clerk/nextjs/server";
-import { listUsersForAdmin } from "./adminUsers.js";
+import { listUsersForAdmin } from "./adminUsers";
 
 function fakeStore(
   rows: { clerkUserId: string; role: "owner" | "admin" | "member" }[],
@@ -1132,7 +1041,7 @@ Expected: FAIL — `adminUsers.ts` does not exist.
 // packages/web/src/lib/adminUsers.ts
 import { clerkClient } from "@clerk/nextjs/server";
 import type { UserRoleStore } from "core";
-import { userRoleStore } from "./db.js";
+import { userRoleStore } from "./db";
 
 export interface AdminUserRow {
   id: string;
@@ -1178,7 +1087,7 @@ vi.mock("@/lib/adminUsers", () => ({ listUsersForAdmin: vi.fn() }));
 
 import { requireRole } from "@/lib/auth";
 import { listUsersForAdmin } from "@/lib/adminUsers";
-import { GET } from "./route.js";
+import { GET } from "./route";
 
 describe("GET /admin/api/users", () => {
   it("returns the guard's status when not authorized", async () => {
