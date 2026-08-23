@@ -21,7 +21,7 @@ identity and role administration only.
 
 - Login via Clerk, Google OAuth only, using Clerk's out-of-the-box UI components.
 - A real `Role` concept (not a hardcoded allowlist): `owner` (Super Admin), `admin` (Admin), `member` (Member).
-- First Super Admin bootstrapped automatically from a `ULTRA_ADMIN_EMAIL` env var (Vercel-provided, a single address), no manual seed step.
+- First Super Admin bootstrapped automatically from a `SUPER_ADMIN_EMAIL` env var (Vercel-provided, a single address), no manual seed step.
 - `/admin` UI, gated to `owner` and `admin` roles only (plain Members never see it):
   - List all users (Clerk identity data + role).
   - Super Admin (`owner`) can invite a new user by email, restricted to `@gmail.com` addresses, choosing their role (Admin or Member) at invite time.
