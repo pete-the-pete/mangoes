@@ -21,6 +21,10 @@ for (const [key, value] of Object.entries(fileEnv)) {
   }
 }
 
+// Mutating process.env at config module scope rather than `test: { env }` —
+// workers inherit the parent's env at spawn. Verified across all three layers,
+// but it's the undocumented path: if a Vitest bump ever breaks env loading,
+// start here.
 export default defineConfig({
   test: {
     environment: "node",

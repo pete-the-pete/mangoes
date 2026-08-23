@@ -28,6 +28,11 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  // Leave the dev database as we found it — beforeEach only clears *before* a
+  // test, so without this the last case's rows survive the run. A stray second
+  // `owner` would quietly defeat the last-owner guard during Task 6/7's manual
+  // verification.
+  await pool.query("DELETE FROM user_roles");
   await pool.end();
 });
 
