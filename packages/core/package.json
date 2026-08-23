@@ -6,7 +6,15 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc -b",
-    "clean": "tsc -b --clean"
+    "build": "tsc -b && mkdir -p dist/db && cp src/db/*.sql dist/db/",
+    "clean": "tsc -b --clean && rm -rf dist",
+    "migrate": "tsx --env-file-if-exists=../../.env.dev --env-file-if-exists=../../.env scripts/migrate.ts"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.19.0"
   }
 }

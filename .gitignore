@@ -38,3 +38,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*
+
+# ...but the checked-in local-dev defaults are not secret
+!.env.dev

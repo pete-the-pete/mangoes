@@ -66,7 +66,7 @@ Compose Postgres and does not depend on this ticket.
 **Not agent-executable — requires Vercel project settings access.**
 
 - Set `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (from Ticket E1), `DATABASE_URL`
-  (from Ticket E2), and `SUPER_ADMIN_EMAILS` (comma-separated list, e.g. your own gmail address) in
+  (from Ticket E2), and `SUPER_ADMIN_EMAIL` (a single gmail address — yours) in
   the Vercel project's environment variables.
 
 **Depends on:** Ticket E1, Ticket E2.
@@ -79,7 +79,7 @@ that) or any of Tasks 1–10.
 
 **Files:**
 - Create: `docker-compose.yml`
-- Create: `.env.example`
+- Create: `.env.dev`
 - Create: `packages/core/src/db/schema.sql`
 - Create: `packages/core/src/db/migrate.ts`
 - Create: `packages/core/scripts/migrate.ts`
@@ -89,7 +89,7 @@ that) or any of Tasks 1–10.
 - Produces: `runMigrations(pool: Pool): Promise<void>` — later tasks' tests rely on the
   `user_roles` table existing in the local test database before they run.
 
-- [ ] **Step 1: Write `docker-compose.yml`**
+- [x] **Step 1: Write `docker-compose.yml`**
 
 ```yaml
 services:
@@ -114,26 +114,29 @@ volumes:
   postgres_data:
 ```
 
-- [ ] **Step 2: Start it and verify it's healthy**
+- [x] **Step 2: Start it and verify it's healthy**
 
 Run: `docker compose up -d && docker compose ps`
 Expected: `postgres` service shows `healthy` within ~10s.
 
-- [ ] **Step 3: Write `.env.example`**
+- [x] **Step 3: Write `.env.dev`**
 
 ```
 DATABASE_URL=postgresql://mango:mango@localhost:5432/mango_tracker
-CLERK_SECRET_KEY=
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-SUPER_ADMIN_EMAILS=you@gmail.com
 ```
 
-- [ ] **Step 4: Copy it to a real `.env` for local dev**
+Local-only values only. `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`,
+and `SUPER_ADMIN_EMAIL` are Development-scoped in Vercel and arrive via
+`vercel env pull` — duplicating them here as blanks risks the empty copy
+shadowing the real one.
 
-Run: `cp .env.example .env`
-Expected: `.env` exists (already gitignored — confirmed in `.gitignore`'s `.env*.local` / `.env` entries).
+- [x] **Step 4: Confirm local dev works without any hand-made env file**
 
-- [ ] **Step 5: Write the schema**
+No copy needed — `.env.dev` is checked in and loaded directly by the `migrate`
+script. A gitignored `.env` is optional and, when present, overrides it (Node
+applies `--env-file` left to right, last one winning).
+
+- [x] **Step 5: Write the schema**
 
 ```sql
 -- packages/core/src/db/schema.sql
@@ -145,7 +148,7 @@ CREATE TABLE IF NOT EXISTS user_roles (
 );
 ```
 
-- [ ] **Step 6: Write the migration runner**
+- [x] **Step 6: Write the migration runner**
 
 ```ts
 // packages/core/src/db/migrate.ts
@@ -165,7 +168,7 @@ export async function runMigrations(pool: Pool): Promise<void> {
 }
 ```
 
-- [ ] **Step 7: Write the manual migration script**
+- [x] **Step 7: Write the manual migration script**
 
 ```ts
 // packages/core/scripts/migrate.ts
@@ -192,26 +195,26 @@ main().catch((err) => {
 });
 ```
 
-- [ ] **Step 8: Add dependencies and a migrate script to `packages/core/package.json`**
+- [x] **Step 8: Add dependencies and a migrate script to `packages/core/package.json`**
 
 Add to `dependencies`: `"pg": "^8.13.0"`
 Add to `devDependencies`: `"@types/pg": "^8.11.0"`, `"tsx": "^4.19.0"`
 Add to `scripts`: `"migrate": "tsx scripts/migrate.ts"`
 
-- [ ] **Step 9: Install and run the migration against local Postgres**
+- [x] **Step 9: Install and run the migration against local Postgres**
 
 Run: `npm install && set -a && source .env && set +a && npm run migrate -w core`
 Expected: prints `Migrations applied.`
 
-- [ ] **Step 10: Verify the table exists**
+- [x] **Step 10: Verify the table exists**
 
 Run: `docker compose exec postgres psql -U mango -d mango_tracker -c '\d user_roles'`
 Expected: shows the `user_roles` table with columns `clerk_user_id`, `role`, `created_at`, `updated_at`.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
-git add docker-compose.yml .env.example packages/core/src/db packages/core/scripts packages/core/package.json package-lock.json
+git add docker-compose.yml .env.dev packages/core/src/db packages/core/scripts packages/core/package.json package-lock.json
 git commit -m "infra: add local Postgres via Docker Compose and user_roles schema"
 ```
 
@@ -899,10 +902,11 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { resolveRole, type Role, type UserRoleStore } from "core";
 import { userRoleStore } from "./db.js";
 
-const SUPER_ADMIN_EMAILS = (process.env.SUPER_ADMIN_EMAILS ?? "")
-  .split(",")
-  .map((email) => email.trim())
-  .filter(Boolean);
+// One bootstrap admin, not a list. `core`'s resolveRole keeps a general
+// `bootstrapEmails: string[]` interface; the app is what decides there is
+// exactly one, so core stays domain-agnostic.
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL?.trim() ?? "";
+const BOOTSTRAP_EMAILS = SUPER_ADMIN_EMAIL ? [SUPER_ADMIN_EMAIL] : [];
 
 export async function getCurrentUserRole(
   store: UserRoleStore = userRoleStore,
@@ -922,7 +926,7 @@ export async function getCurrentUserRole(
   const role = await resolveRole(store, {
     clerkUserId: userId,
     email,
-    bootstrapEmails: SUPER_ADMIN_EMAILS,
+    bootstrapEmails: BOOTSTRAP_EMAILS,
     intendedRoleFromInvitation,
   });
 
