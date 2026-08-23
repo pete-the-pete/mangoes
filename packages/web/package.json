@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "prebuild": "npm run build --prefix ../core",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
