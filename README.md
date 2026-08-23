@@ -31,3 +31,19 @@ the app.
 
 DDL goes over the unpooled connection on purpose — a transaction pooler can
 land it on a different backend than it started on.
+
+## Tests
+
+```sh
+npm run test -w core       # 14 tests
+npm run typecheck -w core  # tests + scripts, which `npm run build` doesn't cover
+```
+
+`packages/core`'s store tests run against the real local Postgres, so
+`docker compose up -d` has to be running. They `DELETE FROM user_roles`, and
+refuse to run against any host that isn't `localhost` or `127.0.0.1` — pointing
+`DATABASE_URL` at a shared database will abort rather than wipe its table.
+
+The test suite reads `.env.dev` then `.env` with the same precedence as
+`npm run migrate -w core`, so both commands always agree on which database
+they're talking to.
