@@ -6,11 +6,11 @@ vi.mock("@clerk/nextjs/server", () => ({
   clerkClient: vi.fn(),
 }));
 
-// Importing auth.ts pulls in ./db, which would otherwise construct a real pg Pool.
-vi.mock("./db", () => ({ userRoleStore: undefined }));
+// Importing auth.ts pulls in @/lib/db, which would otherwise construct a real pg Pool.
+vi.mock("@/lib/db", () => ({ userRoleStore: undefined }));
 
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { requireRole } from "./auth";
+import { requireRole } from "@/lib/auth";
 
 function fakeStore(initial: Record<string, Role> = {}): UserRoleStore {
   const roles = new Map(Object.entries(initial));
