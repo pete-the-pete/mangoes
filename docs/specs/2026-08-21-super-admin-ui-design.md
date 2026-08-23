@@ -107,6 +107,9 @@ never exposed to the client.
 
 - Auth: `owner` only.
 - Body: `{ role: "owner" | "admin" | "member" }`.
+- Rejects with `403 { error: "You cannot change your own role" }` when the caller's own
+  `clerkUserId` matches the target — checked before the body is parsed, so a malformed body
+  never overrides this. Nobody, including an owner, can change their own role.
 - Before persisting, runs the last-owner guard (`wouldRemoveLastOwner`) against current `user_roles`
   state; rejects with a clear error if the change would leave zero owners.
 - Upserts `user_roles`.
@@ -116,7 +119,8 @@ never exposed to the client.
 - **`/admin`** — single page for this slice.
   - `owner`: full user table (avatar, name, email, role badge, joined date) + "Invite user" button.
     Each row has an inline role-select control that fires the PATCH endpoint on change, with
-    optimistic UI update and rollback-on-error.
+    optimistic UI update and rollback-on-error. The signed-in user's own row renders its role
+    control disabled, since the API rejects self role changes.
   - `admin`: same table, read-only — no invite button, no role controls rendered.
 - **Invite modal** — email input + role select (`Admin` / `Member`, default `Admin`). Client-side
   gmail validation before submit; server re-validates regardless.
