@@ -79,7 +79,7 @@ that) or any of Tasks 1–10.
 
 **Files:**
 - Create: `docker-compose.yml`
-- Create: `.env.example`
+- Create: `.env.dev`
 - Create: `packages/core/src/db/schema.sql`
 - Create: `packages/core/src/db/migrate.ts`
 - Create: `packages/core/scripts/migrate.ts`
@@ -119,7 +119,7 @@ volumes:
 Run: `docker compose up -d && docker compose ps`
 Expected: `postgres` service shows `healthy` within ~10s.
 
-- [x] **Step 3: Write `.env.example`**
+- [x] **Step 3: Write `.env.dev`**
 
 ```
 DATABASE_URL=postgresql://mango:mango@localhost:5432/mango_tracker
@@ -130,10 +130,11 @@ and `ULTRA_ADMIN_EMAIL` are Development-scoped in Vercel and arrive via
 `vercel env pull` — duplicating them here as blanks risks the empty copy
 shadowing the real one.
 
-- [x] **Step 4: Copy it to a real `.env` for local dev**
+- [x] **Step 4: Confirm local dev works without any hand-made env file**
 
-Run: `cp .env.example .env`
-Expected: `.env` exists (already gitignored — confirmed in `.gitignore`'s `.env*.local` / `.env` entries).
+No copy needed — `.env.dev` is checked in and loaded directly by the `migrate`
+script. A gitignored `.env` is optional and, when present, overrides it (Node
+applies `--env-file` left to right, last one winning).
 
 - [x] **Step 5: Write the schema**
 
@@ -213,7 +214,7 @@ Expected: shows the `user_roles` table with columns `clerk_user_id`, `role`, `cr
 - [x] **Step 11: Commit**
 
 ```bash
-git add docker-compose.yml .env.example packages/core/src/db packages/core/scripts packages/core/package.json package-lock.json
+git add docker-compose.yml .env.dev packages/core/src/db packages/core/scripts packages/core/package.json package-lock.json
 git commit -m "infra: add local Postgres via Docker Compose and user_roles schema"
 ```
 
