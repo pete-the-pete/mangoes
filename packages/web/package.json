@@ -6,6 +6,7 @@
     "dev": "node scripts/dev.mjs",
     "prebuild": "npm run build --prefix ../core",
     "build": "next build",
+    "vercel-build": "npm run migrate --prefix ../core && npm run build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run"
