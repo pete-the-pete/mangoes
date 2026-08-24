@@ -7,10 +7,11 @@ import { requireRole } from "@/lib/auth";
 import { clerkClient } from "@clerk/nextjs/server";
 import { POST } from "@/app/admin/api/users/invite/route";
 
-function makeRequest(body: unknown) {
+function makeRequest(body: unknown, headers?: Record<string, string>) {
   return new Request("http://localhost/admin/api/users/invite", {
     method: "POST",
     body: JSON.stringify(body),
+    headers,
   });
 }
 
@@ -83,7 +84,44 @@ describe("POST /admin/api/users/invite", () => {
     expect(createInvitation).toHaveBeenCalledWith({
       emailAddress: "friend@gmail.com",
       publicMetadata: { intendedRole: "member" },
+      // No Host header on a synthetic undici Request, so this exercises the
+      // `new URL(request.url).origin` fallback. Real HTTP/1.1 requests always
+      // carry Host; the forwarded-header path is covered below.
+      redirectUrl: "http://localhost/sign-up",
     });
+  });
+
+  it("builds the return link from the forwarded host, not request.url", async () => {
+    // Behind `tailscale serve` (and Vercel) `request.url` carries the internal
+    // host with the external scheme, so trusting it would email out a link to
+    // https://localhost:3000. The proxy's headers are the only correct source.
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      status: 200,
+      role: "owner",
+      clerkUserId: "u1",
+    });
+    const createInvitation = vi.fn().mockResolvedValue({});
+    vi.mocked(clerkClient).mockResolvedValue({
+      invitations: { createInvitation },
+    } as never);
+
+    await POST(
+      makeRequest(
+        { email: "friend@gmail.com", role: "admin" },
+        {
+          "x-forwarded-host": "mangoes.example.ts.net",
+          "x-forwarded-proto": "https",
+          host: "localhost:3000",
+        },
+      ),
+    );
+
+    expect(createInvitation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirectUrl: "https://mangoes.example.ts.net/sign-up",
+      }),
+    );
   });
 
   it("returns 502 when Clerk's invitation call throws", async () => {

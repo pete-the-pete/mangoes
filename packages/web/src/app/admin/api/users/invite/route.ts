@@ -4,6 +4,27 @@ import { requireRole } from "@/lib/auth";
 
 const GMAIL_PATTERN = /^[^\s@]+@gmail\.com$/i;
 
+/**
+ * The public origin this request arrived on, used to build the invitation's
+ * return link.
+ *
+ * Deliberately not `new URL(request.url).origin`. Behind a TLS-terminating
+ * proxy Next reports the *internal* host with the *external* scheme: measured
+ * over `tailscale serve`, `request.url` is `https://localhost:3000` while the
+ * browser is on `https://<machine>.<tailnet>.ts.net`. That mismatch would bake
+ * a dead link into every invitation email, so read the forwarded headers the
+ * proxy actually sets and fall back only when there are none.
+ */
+function requestOrigin(request: Request): string {
+  const host =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (!host) {
+    return new URL(request.url).origin;
+  }
+  const proto = request.headers.get("x-forwarded-proto") ?? "https";
+  return `${proto}://${host}`;
+}
+
 export async function POST(request: Request) {
   const guard = await requireRole(["owner"]);
   if (!guard.ok) {
@@ -38,6 +59,11 @@ export async function POST(request: Request) {
     await clerk.invitations.createInvitation({
       emailAddress: email,
       publicMetadata: { intendedRole: role },
+      // Without this Clerk finishes the whole invite flow on its own Account
+      // Portal and drops the invitee on `accounts.dev/default-redirect`, never
+      // touching this app. Must be absolute: a relative path resolves against
+      // Clerk's domain, not ours (verified — it 404s there).
+      redirectUrl: `${requestOrigin(request)}/sign-up`,
     });
   } catch (err) {
     const message =
