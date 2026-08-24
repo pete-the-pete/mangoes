@@ -1354,6 +1354,11 @@ git commit -m "feat(web): add POST /admin/api/users/invite route"
 **Interfaces:**
 - Consumes: `requireRole` from Task 6; `userRoleStore` from `packages/web/src/lib/db.ts`; `wouldRemoveLastOwner` from `core` (Task 2).
 
+**Business rule:** nobody can change their own role, including an owner. The handler returns
+`403 { error: "You cannot change your own role" }` when `guard.clerkUserId` matches the target
+`clerkUserId`, checked immediately after the `requireRole(["owner"])` gate and before the request
+body is parsed — this is an authorization rule, so a malformed body must not change the answer.
+
 - [ ] **Step 1: Write the failing test**
 
 ```ts
@@ -1554,6 +1559,9 @@ export default async function AdminPage() {
 ```
 
 - [ ] **Step 2: Write the user table (client component)**
+
+Note: the PATCH route rejects changing your own role (403), so the signed-in user's own row
+should render its role control disabled rather than let the request round-trip and fail.
 
 ```tsx
 // packages/web/src/app/admin/AdminUserTable.tsx
