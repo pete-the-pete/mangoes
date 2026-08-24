@@ -10,9 +10,11 @@ import { SignUp } from "@clerk/nextjs";
 export default function SignUpPage() {
   return (
     <div className="flex flex-1 items-center justify-center p-6">
-      {/* Sign-ups are invitation-only at the instance level, so this page is
-          only ever reachable with a valid ticket. */}
-      <SignUp fallbackRedirectUrl="/admin" signInUrl="/sign-in" />
+      {/* Redirects come from the NEXT_PUBLIC_CLERK_SIGN_UP_* env vars — see the
+          note in the sign-in page for why they aren't props. Sign-ups are
+          invitation-only at the instance level, so this page is only ever
+          reachable with a valid ticket. */}
+      <SignUp />
     </div>
   );
 }
