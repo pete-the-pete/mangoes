@@ -47,3 +47,25 @@ refuse to run against any host that isn't `localhost` or `127.0.0.1` — pointin
 The test suite reads `.env.dev` then `.env` with the same precedence as
 `npm run migrate -w core`, so both commands always agree on which database
 they're talking to.
+
+## Deployments
+
+Vercel's root directory is `packages/web`, so it runs that package's scripts.
+`vercel-build` takes precedence over `build` when present, which is where
+migrations hang off:
+
+```
+vercel-build → npm run migrate --prefix ../core  (schema)
+             → npm run build → prebuild (builds core) → next build
+```
+
+Local `npm run build -w web` deliberately stays on plain `build` — it doesn't
+run migrations, so building doesn't require Postgres to be up.
+
+**Preview and Production share one Neon database.** No per-preview branching is
+wired up, so every preview build applies its DDL to the same database
+production reads. `schema.sql` is entirely `IF NOT EXISTS`, so today that's a
+no-op — it stops being harmless at the first destructive migration, and
+concurrent preview builds can race. Tracked separately; wire up Neon's
+copy-on-write preview branches before writing a migration that drops or
+rewrites anything.
