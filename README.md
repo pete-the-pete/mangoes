@@ -8,7 +8,7 @@ Neon-backed Postgres provisioned through Vercel — those connection strings are
 injected by Vercel and are not needed here.
 
 ```sh
-vercel env pull packages/web/.env.local  # Clerk keys, SUPER_ADMIN_EMAIL
+vercel env pull packages/web/.env.local  # Clerk keys + redirects, SUPER_ADMIN_EMAIL
 docker compose up -d                     # Postgres on localhost:5432
 npm install
 npm run migrate -w core                  # creates the schema
