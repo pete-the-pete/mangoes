@@ -28,6 +28,12 @@ export async function POST(request: Request, context: RouteContext) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
+  // request.json() happily parses a bare `null`, `"string"`, `42`, etc. — valid
+  // JSON, but not a body we can destructure. Reject those explicitly rather
+  // than letting the destructure below throw and surface as a 500.
+  if (typeof body !== "object" || body === null) {
+    return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
+  }
 
   const { itemTypeKey, subjectUserId } = body as {
     itemTypeKey?: unknown;

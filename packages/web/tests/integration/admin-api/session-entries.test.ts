@@ -90,6 +90,14 @@ describe("POST /admin/api/groups/:groupId/sessions/:sessionId/entries", () => {
     expect(res.status).toBe(404);
   });
 
+  it("400s a literal null JSON body instead of 500ing on the destructure", async () => {
+    asGroupAdmin();
+    vi.mocked(cycleStore.getCycle).mockResolvedValue(CYCLE);
+    const res = await APPEND(appendRequest(null), sessionParams);
+    expect(res.status).toBe(400);
+    expect(ledgerStore.append).not.toHaveBeenCalled();
+  });
+
   it("stores subjectUserId: null for an untagged write", async () => {
     asGroupAdmin();
     vi.mocked(cycleStore.getCycle).mockResolvedValue(CYCLE);
