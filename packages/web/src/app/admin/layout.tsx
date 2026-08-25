@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUserRole } from "@/lib/auth";
+import { AdminNav } from "./AdminNav";
 
 // Gates the /admin *pages* only. Route handlers don't run layouts, so the
 // /admin/api/* endpoints added in Tasks 7-9 are guarded by requireRole() inside
@@ -24,5 +25,10 @@ export default async function AdminLayout({
       </div>
     );
   }
-  return <>{children}</>;
+  return (
+    <>
+      <AdminNav currentRole={current.role} />
+      {children}
+    </>
+  );
 }
