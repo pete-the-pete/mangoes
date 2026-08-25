@@ -449,7 +449,10 @@ Same convention as both predecessors — real Postgres, fake only the Clerk boun
 
 ### `packages/web`
 
-Route handler tests against a test Postgres with the Clerk client faked:
+Route handler tests **mocking the store layer** (`vi.mock("@/lib/db", …)`) plus the relevant guard,
+matching what v0.1 and v0.2 actually ship — not a test Postgres. Real Postgres earns its keep in
+`packages/core`, where the concurrency test lives; a mocked pool would make that test meaningless.
+Cases:
 
 - Participant guard: non-participant `403`, participant passes, platform `owner` passes as superuser,
   unauthenticated `401`.
@@ -523,7 +526,10 @@ No E-tickets — everything in this slice is agent-executable.
 2. ~~Plan doc, then issues.~~ **Done differently:** milestone #3, issues #55–#70, and board items
    were created directly from this spec. A plan doc is optional now and, if written, references
    issue numbers rather than restating criteria.
-3. Implementation proceeds one branch/PR per issue, each with `Closes #N`. v0.2 has merged, so
+3. Plan doc written: [`docs/plans/2026-08-24-member-logging.md`](../plans/2026-08-24-member-logging.md),
+   16 tasks with per-task acceptance criteria and step-by-step TDD cycles. Issue bodies #55–#70 are
+   regenerated from it, so the criteria have one source.
+4. Implementation proceeds one branch/PR per issue, each with `Closes #N`. v0.2 has merged, so
    `#55` and `#57` are unblocked today.
 
 ### Risks carried into planning
