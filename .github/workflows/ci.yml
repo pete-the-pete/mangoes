@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to the same branch makes the in-flight run irrelevant. Not applied
+# to main — those runs are the record of what landed.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # packages/core's store tests refuse any host that isn't localhost/127.0.0.1
+    # (they DELETE FROM real tables). A `services:` container maps to localhost on
+    # the runner; a job-level `container:` would resolve this as `postgres` and the
+    # guard would reject it. Keep the tests on the runner.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mango
+          POSTGRES_PASSWORD: mango
+          POSTGRES_DB: mango_tracker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mango -d mango_tracker"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Matches docker-compose.yml. Set here rather than leaning on the tracked
+      # .env.dev: core's vitest config gives a real shell variable precedence over
+      # the file, so this is the value that wins either way.
+      DATABASE_URL: postgresql://mango:mango@localhost:5432/mango_tracker
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Pinned, not read from engines.node — that's a ">=" range, which
+          # resolves to the newest Node available and would silently move to a
+          # major nobody has run the suite against.
+          node-version: 26.7.0
+          cache: npm
+
+      - run: npm ci
+
+      # web imports from "core" and resolves against packages/core/dist, so core
+      # has to be built before web's tests run — not just before web's build.
+      - name: Build core
+        run: npm run build --prefix packages/core
+
+      - name: Typecheck core
+        run: npm run typecheck --prefix packages/core
+
+      # Migrations run from the suite's own beforeAll (runMigrations), so there is
+      # no separate migrate step here.
+      - name: Test core
+        run: npm run test --prefix packages/core
+
+      - name: Test web
+        run: npm run test -w web
+
+      # next build is what typechecks packages/web — it has no typecheck script.
+      - name: Build web
+        run: npm run build -w web
+
+      # No lint step on purpose: `npm run lint -w web` dies at module load because
+      # typescript-eslint rejects TS 7. Add it here once #21 is fixed.
