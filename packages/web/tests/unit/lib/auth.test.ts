@@ -8,9 +8,11 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 // Importing auth.ts pulls in @/lib/db, which would otherwise construct a real pg Pool.
 vi.mock("@/lib/db", () => ({ userRoleStore: undefined }));
+vi.mock("@/lib/pendingCohortInvite", () => ({ joinPendingCohort: vi.fn() }));
 
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { requireRole } from "@/lib/auth";
+import { joinPendingCohort } from "@/lib/pendingCohortInvite";
+import { getCurrentUserRole, requireRole } from "@/lib/auth";
 
 function fakeStore(initial: Record<string, Role> = {}): UserRoleStore {
   const roles = new Map(Object.entries(initial));
@@ -48,6 +50,7 @@ describe("requireRole", () => {
   beforeEach(() => {
     vi.mocked(auth).mockReset();
     vi.mocked(clerkClient).mockReset();
+    vi.mocked(joinPendingCohort).mockReset();
   });
 
   it("returns 401 when not signed in", async () => {
@@ -82,6 +85,30 @@ describe("requireRole", () => {
       status: 200,
       role: "owner",
       clerkUserId: "u1",
+    });
+  });
+});
+
+// The group half of an invitation is consumed on the same pass that resolves the
+// platform role — there is no other request guaranteed to run for every user.
+describe("getCurrentUserRole", () => {
+  beforeEach(() => {
+    vi.mocked(auth).mockReset();
+    vi.mocked(clerkClient).mockReset();
+    vi.mocked(joinPendingCohort).mockReset();
+  });
+
+  it("consumes a pending group invitation", async () => {
+    signedInAs("friend@gmail.com", {
+      intendedRole: "member",
+      intendedCohortId: "c1",
+    });
+
+    await getCurrentUserRole(fakeStore({ u1: "member" }));
+
+    expect(joinPendingCohort).toHaveBeenCalledWith({
+      clerkUserId: "u1",
+      publicMetadata: { intendedRole: "member", intendedCohortId: "c1" },
     });
   });
 });
