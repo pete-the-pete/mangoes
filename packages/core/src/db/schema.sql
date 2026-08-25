@@ -62,3 +62,29 @@ CREATE TABLE IF NOT EXISTS cycle_item_types (
   position INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (cycle_id, item_type_key)
 );
+
+ALTER TABLE cycles ADD COLUMN IF NOT EXISTS last_seq BIGINT NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS ledger_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  cycle_id UUID NOT NULL REFERENCES cycles(id) ON DELETE CASCADE,
+  seq BIGINT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('log', 'void')),
+  item_type_key TEXT NOT NULL REFERENCES item_types(key),
+  -- NULL means untagged: credited to the group, to no individual.
+  subject_user_id TEXT,
+  actor_user_id TEXT NOT NULL,
+  voids_entry_id UUID REFERENCES ledger_entries(id),
+  client_entry_id UUID NOT NULL,
+  occurred_at TIMESTAMPTZ NOT NULL,
+  -- clock_timestamp(), not now(): now() is transaction-start time, and appends
+  -- queue on the cycle row lock, so transactions that begin together would share
+  -- a timestamp. This column records when the row was actually written.
+  created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+  CHECK (kind = 'log' OR voids_entry_id IS NOT NULL),
+  UNIQUE (cycle_id, seq),
+  UNIQUE (cycle_id, client_entry_id)
+);
+
+CREATE INDEX IF NOT EXISTS ledger_entries_cycle_seq_idx ON ledger_entries (cycle_id, seq);
+CREATE INDEX IF NOT EXISTS ledger_entries_subject_idx ON ledger_entries (cycle_id, subject_user_id);
