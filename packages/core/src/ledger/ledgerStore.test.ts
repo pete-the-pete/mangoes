@@ -6,6 +6,7 @@ import { createPostgresCycleStore } from "../cycles/cycleStore.js";
 import { createPostgresCohortStore } from "../cohorts/cohortStore.js";
 import { runMigrations } from "../db/migrate.js";
 import { UNTAGGED, type AppendContext } from "./types.js";
+import { emptyAggregate, foldEntries } from "./fold.js";
 
 const connectionString = process.env["DATABASE_URL"];
 if (!connectionString) {
@@ -234,6 +235,32 @@ describe("createPostgresLedgerStore", () => {
     const found = await store.getEntryById(cycle.id, entry!.id);
     expect(found?.clientEntryId).toBe(op.clientEntryId);
     expect(await store.getEntryById(cycle.id, randomUUID())).toBeUndefined();
+  });
+
+  // snapshot() computes counts in SQL for a cold open; every client computes the
+  // same counts by folding deltas. Nothing forces those two implementations to
+  // agree, and if they drift a member's leaderboard quietly depends on whether
+  // they opened cold or caught up — which is exactly the kind of bug that never
+  // shows up as an error. This pins them together.
+  it("agrees with foldEntries over the same history", async () => {
+    const cycle = await makeCycle();
+    const mine = log("mango");
+    await store.append(cycle.id, MEMBER, [mine, log("taco")]);
+    await store.append(cycle.id, { ...MEMBER, actorUserId: "u2" }, [log("mango"), log("mango")]);
+    await store.append(cycle.id, ADMIN, [{ ...log("taco"), subjectUserId: null }]);
+    await store.append(cycle.id, ADMIN, [{ ...log("mango"), subjectUserId: "u2" }]);
+    await store.append(cycle.id, MEMBER, [voidOf(mine.clientEntryId)]);
+
+    const fromSql = await store.snapshot(cycle.id);
+    const all = await store.readSince(cycle.id, 0, 1000);
+    const fromFold = foldEntries(emptyAggregate(), all.entries);
+
+    expect(fromFold.counts).toEqual(fromSql.counts);
+    expect(fromFold.cursor).toBe(fromSql.cursor);
+    // Not a vacuous pass: the history above is meant to exercise every branch.
+    expect(fromSql.counts["u1"]?.["mango"]).toBe(0);
+    expect(fromSql.counts["u2"]?.["mango"]).toBe(3);
+    expect(fromSql.counts[UNTAGGED]?.["taco"]).toBe(1);
   });
 
   // The test that justifies the entire design. Without it, the row-lock argument
