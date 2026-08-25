@@ -1,6 +1,7 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { resolveRole, type Role, type UserRoleStore } from "core";
 import { userRoleStore } from "./db";
+import { joinPendingCohort } from "./pendingCohortInvite";
 
 // One bootstrap admin, not a list. `core`'s resolveRole keeps a general
 // `bootstrapEmails: string[]` interface; the app is what decides there is
@@ -28,6 +29,11 @@ export async function getCurrentUserRole(
     email,
     bootstrapEmails: BOOTSTRAP_EMAILS,
     intendedRoleFromInvitation,
+  });
+
+  await joinPendingCohort({
+    clerkUserId: userId,
+    publicMetadata: (user.publicMetadata ?? {}) as Record<string, unknown>,
   });
 
   return { clerkUserId: userId, role };
