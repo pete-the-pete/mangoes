@@ -81,6 +81,11 @@ export function AdminLogControl(props: AdminLogControlProps) {
   // each successful append grows the server-refreshed list by exactly one, so
   // drop the oldest pending row per entry the refresh actually brought in —
   // first logged, first confirmed.
+  //
+  // A successful void also grows props.entries by one (it's a new ledger
+  // entry too), so a void landing while a log is in flight can confirm the
+  // wrong pending row one refresh early. The window is a single round trip;
+  // not worth more machinery for that.
   useEffect(() => {
     const grew = props.entries.length - prevEntryCount.current;
     if (grew > 0) {

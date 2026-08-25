@@ -9,7 +9,7 @@ import { SessionForm } from "../SessionForm";
 import { AdminLogControl, type AdminEntryView } from "./AdminLogControl";
 
 /** How many recent ledger entries the session page pulls for the admin log control. */
-const RECENT_ENTRIES_LIMIT = 200;
+const RECENT_ENTRIES_LIMIT = 50;
 
 /**
  * The `"YYYY-MM-DDTHH:mm"` shape `datetime-local` requires, in UTC.
@@ -49,11 +49,22 @@ export default async function SessionPage({
     notFound();
   }
 
-  const [catalog, members, entriesPage] = await Promise.all([
+  // readSince is head-anchored (WHERE seq > after, ascending) — reading from 0
+  // gives the OLDEST entries, not the recent ones. snapshot().cursor is the
+  // cycle's current max seq (see fold.test.ts / ledgerStore.test.ts's
+  // fold-vs-SQL cross-check), so it anchors a tail window instead. A void
+  // always has a higher seq than the log it targets, so this window can never
+  // show a voided log as still-live — the head window had the opposite bug.
+  const [catalog, members, snapshot] = await Promise.all([
     itemTypeStore.listItemTypes({ enabledOnly: true }),
     listGroupMembersForAdmin(groupId),
-    ledgerStore.readSince(sessionId, 0, RECENT_ENTRIES_LIMIT),
+    ledgerStore.snapshot(sessionId),
   ]);
+  const entriesPage = await ledgerStore.readSince(
+    sessionId,
+    Math.max(0, snapshot.cursor - RECENT_ENTRIES_LIMIT),
+    RECENT_ENTRIES_LIMIT,
+  );
 
   // A disabled entry leaves the picker but keeps rendering on the session that
   // already uses it (spec: Schema), so its option is added back for this form.
