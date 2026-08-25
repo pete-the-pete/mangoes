@@ -1,0 +1,33 @@
+name: Delete Neon preview branch
+
+# The Vercel-managed Neon integration has no delete-on-git-branch-deletion option:
+# preview branches are removed only when their Vercel *deployments* age out, which
+# is 6 months by default. Every branch here is deleted on merge, so every
+# preview/* Neon branch is orphaned the moment its PR lands, and they pile up
+# against the plan's branch cap until new previews can't provision a database.
+# See #33.
+on:
+  pull_request:
+    types: [closed]
+
+permissions: {}
+
+jobs:
+  delete-branch:
+    runs-on: ubuntu-latest
+
+    # Inert until the one-time setup in #33 is done (NEON_API_KEY secret +
+    # NEON_PROJECT_ID variable). Without this guard the action would run with an
+    # empty key and put a red X on every merged PR. Forks are skipped: they never
+    # get a preview branch, and secrets aren't available to them anyway.
+    if: >-
+      vars.NEON_PROJECT_ID != '' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3.2.1
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          # preview/<git-branch> is the Vercel-managed integration's own naming.
+          branch: preview/${{ github.head_ref }}
+          api_key: ${{ secrets.NEON_API_KEY }}
