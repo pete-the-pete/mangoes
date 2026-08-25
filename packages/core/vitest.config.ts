@@ -28,5 +28,10 @@ for (const [key, value] of Object.entries(fileEnv)) {
 export default defineConfig({
   test: {
     environment: "node",
+    // Every DB test file here shares one local Postgres and deletes rows from
+    // it. Vitest runs files in parallel by default, which turns that sharing
+    // into FK violations and rows vanishing mid-test. Sequential files, always
+    // — this is correctness, not a speed knob.
+    fileParallelism: false,
   },
 });
