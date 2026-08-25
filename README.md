@@ -12,7 +12,14 @@ vercel env pull packages/web/.env.local  # Clerk keys + redirects, SUPER_ADMIN_E
 docker compose up -d                     # Postgres on localhost:5432
 npm install
 npm run migrate -w core                  # creates the schema
+npm run seed -w web                      # populates the emoji catalog
 ```
+
+The seed is not optional. A session must declare at least one **enabled** item
+type, so **session creation is blocked until `npm run seed -w web` has run** —
+an empty `item_types` table leaves the picker with nothing to pick. It is
+`INSERT ... ON CONFLICT (key) DO NOTHING`, so re-running it adds only what's
+missing and never overwrites the Super Admin's enable/disable or relabel edits.
 
 `.env.dev` holds the local defaults and is checked in — nothing to copy. To
 point at a different database, put `DATABASE_URL` in a gitignored `.env`, which
@@ -48,6 +55,11 @@ The test suite reads `.env.dev` then `.env` with the same precedence as
 `npm run migrate -w core`, so both commands always agree on which database
 they're talking to.
 
+Core's store tests empty `item_types` as well, so a test run leaves the local
+emoji catalog wiped. Re-run `npm run seed -w web` before poking at the admin UI
+— an empty catalog makes session creation refuse to submit, which looks like a
+bug and isn't.
+
 ## Deployments
 
 Vercel's root directory is `packages/web`, so it runs that package's scripts.
@@ -55,9 +67,15 @@ Vercel's root directory is `packages/web`, so it runs that package's scripts.
 migrations hang off:
 
 ```
-vercel-build → npm run migrate --prefix ../core  (schema)
+vercel-build → npm run build --prefix ../core    (core's dist/, which the seed imports)
+             → npm run migrate --prefix ../core  (schema)
+             → npm run seed                      (emoji catalog)
              → npm run build → prebuild (builds core) → next build
 ```
+
+Core is built first because the seed script imports the `core` package, which
+resolves through core's gitignored `dist/`. `prebuild` still rebuilds it before
+`next build`; `tsc -b` is incremental, so the second pass is nearly free.
 
 Local `npm run build -w web` deliberately stays on plain `build` — it doesn't
 run migrations, so building doesn't require Postgres to be up.
@@ -66,6 +84,8 @@ run migrations, so building doesn't require Postgres to be up.
 wired up, so every preview build applies its DDL to the same database
 production reads. `schema.sql` is entirely `IF NOT EXISTS`, so today that's a
 no-op — it stops being harmless at the first destructive migration, and
-concurrent preview builds can race. Tracked separately; wire up Neon's
+concurrent preview builds can race. The catalog seed is `ON CONFLICT DO
+NOTHING`, so it lands in that shared database harmlessly for the same reason.
+Tracked separately; wire up Neon's
 copy-on-write preview branches before writing a migration that drops or
 rewrites anything.

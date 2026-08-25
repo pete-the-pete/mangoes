@@ -57,7 +57,7 @@ Pete is building this as a personal project and wants the foundation (`packages/
 1. Group admin creates a session: name, time box (start/end), and the item type(s) to track (seeded with mango; can add margarita, taco, etc.).
 2. Admin invites members from their group to the session (defaults to whole group, can subset).
 3. Session goes live at start time; admin can log on behalf of any member, or log "for the group" (untagged), at any point.
-4. When the time box ends, the session auto-closes to individual edits. Admin can still log/edit/correct entries after close; every such edit is recorded and visible in a detailed audit view on the report.
+4. The time box is a soft deadline: when it ends, the session stays open and the admin is prompted to close it. Closing is an explicit admin action, and it is what locks the session to individual edits. Admin can still log/edit/correct entries after close; every such edit is recorded and visible in a detailed audit view on the report.
 
 #### Feedback
 
@@ -116,7 +116,10 @@ Group stats are a **derived view over the append-only event log**, not pushed st
 - [ ] Clerk-backed invite-only auth; no self-serve signup
 - [ ] Roles: Super Admin (initially Pete), Admin, Member
 - [ ] Super Admin can invite users and designate Admins
-- [ ] Admins can create groups, invite users to the platform, and invite users to their groups
+- [ ] Admins can create groups and invite users to their groups. Inviting a *new* email to a group
+  sends the platform invitation as a side effect, so admins never need direct access to the platform
+  user list — that stays Super-Admin-only (resolved 2026-08-24, see the
+  [Groups & Sessions design spec](2026-08-24-groups-and-sessions-design.md))
 - [ ] Users can belong to multiple groups and multiple sessions simultaneously
 
 **Groups & sessions**
@@ -194,8 +197,13 @@ Group stats are a **derived view over the append-only event log**, not pushed st
 
 ## Open Questions
 
-- [ ] Does a group have exactly one admin, or can a group have multiple admins? (Brief implies "admins can create groups" — plural admins per platform, but singular-vs-multiple admin per *group* isn't stated.) — Pete, before technical planning.
-- [ ] When a session's time box ends, does it auto-close immediately, or does it need an explicit "close session" action from the admin (with the time box as a soft deadline/reminder)? — Pete, before technical planning.
+- [x] **Resolved 2026-08-24:** a group can have **multiple admins**, carried as a per-group role
+  alongside the platform role. A group admin must also hold the platform Admin role. See the
+  [Groups & Sessions design spec](2026-08-24-groups-and-sessions-design.md).
+- [x] **Resolved 2026-08-24:** closing is an **explicit admin action**; the time box is a soft
+  deadline that prompts but never changes state on its own. A session past its end time is still
+  live until someone closes it. See the
+  [Groups & Sessions design spec](2026-08-24-groups-and-sessions-design.md).
 - [ ] Should Members be able to see who invited them / the full member list of a group, or is group membership itself semi-private? — Pete, can defer to design phase.
 
 ## Handoff
