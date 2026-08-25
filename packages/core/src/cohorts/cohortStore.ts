@@ -164,13 +164,33 @@ export function createPostgresCohortStore(pool: Pool): CohortStore {
       );
     },
 
-    // Task 3 extends this to clear participant rows on open cycles — that table
-    // does not exist yet.
+    // Removing someone stops them participating going forward, but closed cycles
+    // keep their roster — that list is the record of who was actually there, and
+    // the logging slice hangs totals off exactly these rows.
     async removeMember(cohortId, clerkUserId) {
-      await pool.query(
-        `DELETE FROM cohort_members WHERE cohort_id = $1 AND clerk_user_id = $2`,
-        [cohortId, clerkUserId],
-      );
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `DELETE FROM cycle_participants p
+           USING cycles c
+           WHERE p.cycle_id = c.id
+             AND c.cohort_id = $1
+             AND c.closed_at IS NULL
+             AND p.clerk_user_id = $2`,
+          [cohortId, clerkUserId],
+        );
+        await client.query(
+          `DELETE FROM cohort_members WHERE cohort_id = $1 AND clerk_user_id = $2`,
+          [cohortId, clerkUserId],
+        );
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
     },
 
     async listAdminMembershipsForUser(clerkUserId) {

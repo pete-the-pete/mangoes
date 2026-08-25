@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { Pool } from "pg";
 import { createPostgresCohortStore } from "./cohortStore.js";
+import { createPostgresCycleStore } from "../cycles/cycleStore.js";
 import { runMigrations } from "../db/migrate.js";
 
 const connectionString = process.env["DATABASE_URL"];
@@ -19,6 +20,11 @@ const pool = new Pool({ connectionString });
 
 beforeAll(async () => {
   await runMigrations(pool);
+  await pool.query(
+    `INSERT INTO item_types (key, emoji, label, position)
+     VALUES ('mango', '🥭', 'Mango', 0)
+     ON CONFLICT (key) DO NOTHING`,
+  );
 });
 
 beforeEach(async () => {
@@ -28,6 +34,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await pool.query("DELETE FROM cohorts");
+  await pool.query("DELETE FROM item_types WHERE key = 'mango'");
   await pool.end();
 });
 
@@ -96,5 +103,29 @@ describe("createPostgresCohortStore", () => {
 
     await store.demoteAdminMemberships("u2");
     expect(await store.getMemberRole(cohort.id, "u2")).toBe("member");
+  });
+  it("clears participant rows on open cycles but not closed ones", async () => {
+    const store = createPostgresCohortStore(pool);
+    const cycles = createPostgresCycleStore(pool);
+    const cohort = await store.createCohort({ name: "Cabo", createdBy: "u1" });
+    await store.addMember(cohort.id, "u2", "member");
+
+    const shared = {
+      cohortId: cohort.id,
+      startsAt: new Date("2026-09-01T00:00:00Z"),
+      endsAt: new Date("2026-09-08T00:00:00Z"),
+      itemTypeKeys: ["mango"],
+      participantIds: ["u1", "u2"],
+      createdBy: "u1",
+    };
+    const open = await cycles.createCycle({ ...shared, name: "Open" });
+    const closed = await cycles.createCycle({ ...shared, name: "Closed" });
+    await cycles.closeCycle(closed.id, "u1");
+
+    await store.removeMember(cohort.id, "u2");
+
+    expect((await cycles.getCycle(open.id))?.participantIds).toEqual(["u1"]);
+    expect([...((await cycles.getCycle(closed.id))?.participantIds ?? [])].sort())
+      .toEqual(["u1", "u2"]);
   });
 });
