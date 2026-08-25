@@ -1,9 +1,11 @@
 import "fake-indexeddb/auto";
 import { describe, it, expect, beforeEach } from "vitest";
 import { openSyncStore, type SyncStore } from "@/lib/sync/store";
-import { parseAppendOps } from "@/lib/appendOps";
+import { parseAppendOps, MAX_BATCH } from "@/lib/appendOps";
+import type { EntryJson } from "@/lib/ledgerJson";
 import {
   flushOutbox,
+  pullDelta,
   reviveEntry,
   displayedAggregate,
   dropConfirmed,
@@ -163,6 +165,194 @@ describe("flushOutbox", () => {
 
     const outbox = await store.readOutbox(SESSION);
     expect(outbox[0]!.attemptId).toBeUndefined();
+  });
+
+  it("chunks a claim bigger than MAX_BATCH into multiple requests and settles every op", async () => {
+    const count = MAX_BATCH + 1;
+    for (let i = 0; i < count; i++) {
+      await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: SUBJECT });
+    }
+
+    const batchSizes: number[] = [];
+    let calls = 0;
+    const fetchImpl = (async (_url: string, init?: RequestInit) => {
+      calls++;
+      const body = JSON.parse(init!.body as string) as { ops: { clientEntryId: string }[] };
+      batchSizes.push(body.ops.length);
+      return Response.json({
+        cursor: calls,
+        accepted: body.ops.map((op) => op.clientEntryId),
+        duplicates: [],
+        rejected: [],
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await flushOutbox(store, SESSION, fetchImpl);
+    expect(result.status).toBe("flushed");
+    expect(calls).toBe(2); // MAX_BATCH + 1 split into two requests
+    expect(batchSizes).toEqual([MAX_BATCH, 1]);
+    if (result.status === "flushed") {
+      expect(result.outcome.accepted).toHaveLength(count);
+    }
+
+    expect(await store.readOutbox(SESSION)).toEqual([]);
+    const mine = await store.readMyEntries(SESSION);
+    expect(mine).toHaveLength(count);
+    expect(mine.every((e) => e.state === "synced")).toBe(true);
+  }, 30_000);
+
+  it("a malformed second batch leaves it (and nothing behind it) claimed, while the first batch's settle stands", async () => {
+    const count = MAX_BATCH + 5;
+    const ids: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: SUBJECT });
+      ids.push(entry.clientEntryId);
+    }
+
+    let calls = 0;
+    const fetchImpl = (async (_url: string, init?: RequestInit) => {
+      calls++;
+      const body = JSON.parse(init!.body as string) as { ops: { clientEntryId: string }[] };
+      if (calls === 1) {
+        return Response.json({
+          cursor: 1,
+          accepted: body.ops.map((op) => op.clientEntryId),
+          duplicates: [],
+          rejected: [],
+        });
+      }
+      return new Response(null, { status: 400 });
+    }) as unknown as typeof fetch;
+
+    const result = await flushOutbox(store, SESSION, fetchImpl);
+    expect(result.status).toBe("malformed");
+    expect(calls).toBe(2);
+    if (result.status === "malformed") {
+      expect(result.outcome?.accepted).toHaveLength(MAX_BATCH);
+    }
+
+    // First batch's ops are gone (settled); the second batch's 5 ops are
+    // still there, still claimed, never resent by a follow-up flush.
+    const outbox = await store.readOutbox(SESSION);
+    expect(outbox).toHaveLength(5);
+    expect(outbox.every((op) => op.attemptId !== undefined)).toBe(true);
+
+    const second = await flushOutbox(store, SESSION, fetchSequence());
+    expect(second).toEqual({ status: "empty" });
+  }, 30_000);
+});
+
+describe("pullDelta", () => {
+  const emptyAgg = { cursor: 0, counts: {} };
+
+  function pageResponse(entries: EntryJson[], nextCursor: number, hasMore: boolean): Response {
+    return Response.json({ entries, nextCursor, hasMore });
+  }
+
+  it("drains multiple pages while hasMore is true and stops on the first false", async () => {
+    const page1Entry: EntryJson = {
+      id: "e1",
+      seq: 1,
+      kind: "log",
+      itemTypeKey: "mango",
+      subjectUserId: SUBJECT,
+      actorUserId: SUBJECT,
+      clientEntryId: "c1",
+      occurredAt: new Date().toISOString(),
+    };
+    const page2Entry: EntryJson = {
+      id: "e2",
+      seq: 2,
+      kind: "log",
+      itemTypeKey: "papaya",
+      subjectUserId: SUBJECT,
+      actorUserId: SUBJECT,
+      clientEntryId: "c2",
+      occurredAt: new Date().toISOString(),
+    };
+
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls++;
+      if (calls === 1) return pageResponse([page1Entry], 1, true);
+      return pageResponse([page2Entry], 2, false);
+    }) as unknown as typeof fetch;
+
+    const result = await pullDelta(SESSION, emptyAgg, [], fetchImpl);
+    expect(calls).toBe(2);
+    expect(result.aggregate.cursor).toBe(2);
+    expect(result.aggregate.counts[SUBJECT]?.mango).toBe(1);
+    expect(result.aggregate.counts[SUBJECT]?.papaya).toBe(1);
+  });
+
+  it("prunes a pending op whose clientEntryId shows up in the drained page (dropConfirmed wiring)", async () => {
+    const entry: EntryJson = {
+      id: "e1",
+      seq: 1,
+      kind: "log",
+      itemTypeKey: "mango",
+      subjectUserId: SUBJECT,
+      actorUserId: SUBJECT,
+      clientEntryId: "pending-1",
+      occurredAt: new Date().toISOString(),
+    };
+    const fetchImpl = (async () => pageResponse([entry], 1, false)) as unknown as typeof fetch;
+
+    const pending: SyncState["pending"] = [
+      {
+        clientEntryId: "pending-1",
+        sessionId: SESSION,
+        kind: "log",
+        itemTypeKey: "mango",
+        subjectUserId: SUBJECT,
+        occurredAt: new Date().toISOString(),
+      },
+    ];
+
+    const result = await pullDelta(SESSION, emptyAgg, pending, fetchImpl);
+    expect(result.pending).toEqual([]);
+  });
+
+  it("stops and returns what it has so far when a page's fetch throws", async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls++;
+      if (calls === 1) {
+        return pageResponse(
+          [
+            {
+              id: "e1",
+              seq: 1,
+              kind: "log",
+              itemTypeKey: "mango",
+              subjectUserId: SUBJECT,
+              actorUserId: SUBJECT,
+              clientEntryId: "c1",
+              occurredAt: new Date().toISOString(),
+            },
+          ],
+          1,
+          true, // claims more, but the next fetch will throw
+        );
+      }
+      throw new TypeError("network down");
+    }) as unknown as typeof fetch;
+
+    const result = await pullDelta(SESSION, emptyAgg, [], fetchImpl);
+    expect(calls).toBe(2);
+    expect(result.aggregate.cursor).toBe(1); // page 1's progress is kept
+  });
+
+  it("stops on a non-ok response without throwing", async () => {
+    const fetchImpl = (async () => new Response(null, { status: 500 })) as unknown as typeof fetch;
+    const result = await pullDelta(SESSION, emptyAgg, [], fetchImpl);
+    expect(result).toEqual({ aggregate: emptyAgg, pending: [] });
+  });
+
+  it("stops on an unparseable body without throwing", async () => {
+    const fetchImpl = (async () => new Response("not json", { status: 200 })) as unknown as typeof fetch;
+    const result = await pullDelta(SESSION, emptyAgg, [], fetchImpl);
+    expect(result).toEqual({ aggregate: emptyAgg, pending: [] });
   });
 });
 
