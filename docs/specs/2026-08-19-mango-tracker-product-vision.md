@@ -116,7 +116,10 @@ Group stats are a **derived view over the append-only event log**, not pushed st
 - [ ] Clerk-backed invite-only auth; no self-serve signup
 - [ ] Roles: Super Admin (initially Pete), Admin, Member
 - [ ] Super Admin can invite users and designate Admins
-- [ ] Admins can create groups, invite users to the platform, and invite users to their groups
+- [ ] Admins can create groups and invite users to their groups. Inviting a *new* email to a group
+  sends the platform invitation as a side effect, so admins never need direct access to the platform
+  user list — that stays Super-Admin-only (resolved 2026-08-24, see the
+  [Groups & Sessions design spec](2026-08-24-groups-and-sessions-design.md))
 - [ ] Users can belong to multiple groups and multiple sessions simultaneously
 
 **Groups & sessions**

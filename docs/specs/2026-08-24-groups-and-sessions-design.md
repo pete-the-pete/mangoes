@@ -38,8 +38,13 @@ this slice creates.
 
 - **Logging** — the append-only event model, one-tap logging, individual/shared attribution.
 - **Reporting** — leaderboards, live totals, recap views, the audit view of post-close edits.
-- **Member-facing surfaces** — members see nothing new until logging ships; every page added here is
-  behind the existing `/admin` gate.
+- **Member-facing surfaces** — every page added here is behind the existing `/admin` gate. This has a
+  consequence worth naming rather than discovering: a friend invited to a group accepts the
+  invitation, signs in, and sees nothing about that group. Their membership is real and their
+  participant rows exist; there is simply no surface for them yet. That is the accepted shape of an
+  admin-only slice — admins compose rosters ahead of the logging release — not an oversight. If the
+  gap between the two slices stretches out, the stopgap is to hold off on group invites, not to bolt
+  a member view onto this one.
 - Offline sync, SSE/polling propagation, notifications, the global "current session" toggle.
 - Group deletion (rename covers the typo case; deletion needs cascade semantics that only matter
   once logs exist), session templates, per-group catalogs, per-item icons beyond the emoji itself.
@@ -192,6 +197,27 @@ shipped, and no second gate has to be kept correct. It also matches the vision's
 the platform Admin role *is* the group-organizer role. The cost is that granting group-admin rights
 is a two-step: the Super Admin promotes the person to platform Admin first.
 
+#### Holding the invariant on platform demotion
+
+An invariant enforced on one write path isn't an invariant. Group-role writes are only half of it —
+the platform-role `PATCH` shipped in v0.1 can break it from the other side: demote the sole admin of
+a group to platform `member` and that group is left with an `admin` row that grants nothing, since
+`requireCohortRole`'s platform gate now rejects them. Only the Super Admin could ever administer that
+group again, and no existing guard would have said a word.
+
+So `PATCH /admin/api/users/:clerkUserId/role` gains a group-aware check, applied when the target role
+is `member`:
+
+- If the target is the **last admin of any group**, reject with `400` naming those groups — the same
+  shape as `wouldRemoveLastOwner`, and the fix is the same: give that group another admin first.
+- Otherwise **cascade** their `cohort_members.role` to `member` everywhere, in the same transaction
+  as the platform-role write, so no stale admin row survives.
+
+This modifies a route and tests that v0.1 already shipped. That is deliberate and worth the churn:
+the alternative is a documented dead-end that only the Super Admin can dig a group out of. It needs
+one new `CohortStore` read — the groups where a user is admin, with each group's admin count — which
+is the same query the guard already wants.
+
 ## API Surface (Next.js Route Handlers, server-only, `packages/web`)
 
 URLs and copy use **Group/Session**; only `core` says Cohort/Cycle. Session routes nest under their
@@ -225,7 +251,9 @@ a plain platform member.
 - `endsAt > startsAt` (also enforced by a table `CHECK`).
 - At least one item type. Every key must exist **and be enabled** at write time.
 - Every `participantIds` entry must be a current member of the group.
-- Omitting `participantIds` on create defaults to all current group members.
+- **At least one participant.** Omitting `participantIds` on create defaults to all current group
+  members; passing an explicit `[]` is a `400`, not a vacuous pass. A session nobody is in cannot be
+  logged against, so it is a mistake worth catching at write time rather than a state to support.
 
 ### Removing a member from a group
 
@@ -329,7 +357,9 @@ failure, and the caller's own row rendered disabled where the API would reject t
 | Session create with a participant outside the group | `400`, field-level |
 | Invite email fails the gmail check | Inline field error, no Clerk call |
 | Clerk API error (invite, revoke, metadata clear) | Surfaced with Clerk's own message, `502`, never swallowed |
-| Empty item-type catalog | Session create is blocked with a message pointing the Super Admin at the seed step |
+| Session create with an empty participant list | `400` — an explicit `[]` is rejected rather than passing vacuously |
+| No **enabled** item types (unseeded catalog, or the Super Admin disabled everything) | Session create is blocked with a message pointing at the catalog page, and at the seed step when the table is empty |
+| Platform demotion of a group's last admin | `400` naming the affected groups; the platform role is not written |
 
 ## Testing
 
@@ -343,14 +373,18 @@ participants and item-type links, close/reopen, catalog list and update.
 **`packages/web`** — route handler tests against a test Postgres with the Clerk client faked:
 
 - Guard behavior: non-member `403`, group admin passes, platform `owner` passes as superuser,
-  unauthenticated `401`.
+  unauthenticated `401`, and a **plain platform member who is a group member still gets `403`** from
+  every group route — the platform gate is the newest rule here and the one most worth pinning.
 - Group create inserts the creator as group admin.
 - Member add: existing-user path vs. invitation path; gmail rejection.
 - Last-admin rejection on both remove and demote.
 - Platform-role invariant rejection on group-admin promotion.
 - Self role-change rejection; self-removal allowed except as last admin.
 - Removal clears participant rows on open sessions and leaves closed sessions' rows intact.
-- Session create validation: inverted window, unknown key, disabled key, non-member participant.
+- Session create validation: inverted window, unknown key, disabled key, non-member participant,
+  empty participant list, no enabled item types in the catalog.
+- Platform demotion of a group's last admin is rejected; demotion of a non-last group admin cascades
+  their group role to `member`.
 - Close then reopen round trip.
 - Item-types `PATCH` is owner-only.
 - Pending-invite consumption: joins once, clears the metadata, does not re-add after removal.
@@ -385,6 +419,7 @@ which a human had to do in a dashboard. Everything in this slice is agent-execut
 | 13 | Web — group detail UI (members, invites, sessions list) | 8, 10, 12 |
 | 14 | Web — session create/detail UI (emoji picker, participants) | 10, 11, 13 |
 | 15 | Web — owner-only item-types admin page | 11, 12 |
+| 16 | Web — hold the platform-admin invariant on platform demotion (reject last group admin, cascade otherwise) — **modifies the v0.1 role PATCH and its tests** | 1, 2 |
 
 **Tasks 1, 3, and 4 all append to the same `schema.sql`.** They are logically independent but
 textually collide, so they either merge in dependency order or take trivial conflicts on rebase —
@@ -395,7 +430,7 @@ exactly the branch-stacking question
 
 Dependencies are recorded as `Blocked by #N` plain text in the issue body, per decisions already
 locked in the milestone-execution doc. Issue numbers don't exist until creation, so it's two passes:
-create all fifteen in dependency order, then `gh issue edit` the bodies with the real numbers.
+create all sixteen in dependency order, then `gh issue edit` the bodies with the real numbers.
 
 Each issue body carries a link to this spec, a link to the plan doc, that task's acceptance criteria,
 and its `Blocked by` line.
