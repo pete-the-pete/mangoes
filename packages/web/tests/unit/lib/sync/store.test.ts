@@ -112,7 +112,7 @@ describe("outbox", () => {
 
     await store.settleFlush(SESSION, {
       accepted: [], duplicates: [],
-      rejected: [{ clientEntryId: voidOp!.clientEntryId, reason: "already_voided", message: "already removed" }],
+      rejected: [{ clientEntryId: voidOp!.clientEntryId, reason: "cycle_closed", message: "closed" }],
       cursor: 1,
     });
 
@@ -120,6 +120,147 @@ describe("outbox", () => {
     const mine = await store.readMyEntries(SESSION);
     expect(mine).toHaveLength(1);
     expect(mine[0]!.state).toBe("synced");
+  });
+
+  // Important 3: an already_voided rejection must not re-arm the undo button —
+  // it can only ever produce another already_voided. Drop the target instead.
+  it("settles an already_voided void rejection by dropping the target, not reviving it", async () => {
+    const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
+    await store.settleFlush(SESSION, { accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
+    await store.undo(SESSION, entry.clientEntryId);
+    const [voidOp] = await store.readOutbox(SESSION);
+
+    await store.settleFlush(SESSION, {
+      accepted: [], duplicates: [],
+      rejected: [{ clientEntryId: voidOp!.clientEntryId, reason: "already_voided", message: "already removed" }],
+      cursor: 1,
+    });
+
+    expect(await store.readOutbox(SESSION)).toEqual([]);
+    expect(await store.readMyEntries(SESSION)).toEqual([]);
+  });
+});
+
+describe("beginFlush / abortFlush", () => {
+  it("marks every returned op in-flight, durably", async () => {
+    await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
+    const ops = await store.beginFlush(SESSION);
+    expect(ops).toHaveLength(1);
+    expect(ops[0]!.inFlight).toBe(true);
+
+    const stored = await store.readOutbox(SESSION);
+    expect(stored[0]!.inFlight).toBe(true);
+  });
+
+  it("abortFlush clears the marker so a failed flush is retried, not stuck in flight", async () => {
+    const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
+    await store.beginFlush(SESSION);
+    await store.abortFlush(SESSION);
+
+    const outbox = await store.readOutbox(SESSION);
+    expect(outbox[0]!.inFlight).toBe(false);
+
+    // Since it's no longer in flight, undo can go back to safely deleting it.
+    await store.undo(SESSION, entry.clientEntryId);
+    expect(await store.readOutbox(SESSION)).toEqual([]);
+    expect(await store.readMyEntries(SESSION)).toEqual([]);
+  });
+});
+
+// Critical 2: undo racing an in-flight flush must never delete an op that may
+// have already reached the server.
+describe("undo racing an in-flight flush", () => {
+  it("voids rather than deletes an in-flight log, and settling the accepted response doesn't resurrect it as synced", async () => {
+    const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
+    const flushed = await store.beginFlush(SESSION);
+    expect(flushed[0]!.inFlight).toBe(true);
+
+    await store.undo(SESSION, entry.clientEntryId);
+
+    // The original (in-flight) log op is still queued, alongside a new void.
+    const outbox = await store.readOutbox(SESSION);
+    expect(outbox.map((op) => op.kind).sort()).toEqual(["log", "void"]);
+    expect((await store.readMyEntries(SESSION))[0]!.state).toBe("voiding");
+
+    // The flush's response comes back accepted for the original log op — this
+    // must not flip the entry back to "synced".
+    await store.settleFlush(SESSION, { accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
+    const mine = await store.readMyEntries(SESSION);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]!.state).toBe("voiding");
+  });
+
+  it("drops the entry and the orphaned void when an in-flight log is rejected after a void was queued against it", async () => {
+    const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
+    await store.beginFlush(SESSION); // marks the log in-flight
+    await store.undo(SESSION, entry.clientEntryId); // races the flush: voids, doesn't delete
+
+    expect(await store.readOutbox(SESSION)).toHaveLength(2); // the in-flight log + the new void
+
+    await store.settleFlush(SESSION, {
+      accepted: [], duplicates: [],
+      rejected: [{ clientEntryId: entry.clientEntryId, reason: "unknown_target", message: "gone" }],
+      cursor: 0,
+    });
+
+    // The log never existed server-side after all: drop it, and the void that
+    // was queued against it — shipping that void would target nothing.
+    expect(await store.readOutbox(SESSION)).toEqual([]);
+    expect(await store.readMyEntries(SESSION)).toEqual([]);
+  });
+});
+
+describe("evictOp", () => {
+  // Important 4: one bad op wedges every op queued behind it in the same
+  // session's outbox (parseAppendOps 400s the whole batch). evictOp is the
+  // recovery path.
+  it("removes a specific op from the outbox so a wedged batch can recover", async () => {
+    const a = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
+    const b = await store.enqueueLog(SESSION, { itemTypeKey: "taco", subjectUserId: "u1" });
+
+    await store.evictOp(SESSION, a.clientEntryId);
+
+    const outbox = await store.readOutbox(SESSION);
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]!.clientEntryId).toBe(b.clientEntryId);
+    expect(await store.readMyEntries(SESSION)).toHaveLength(1);
+  });
+
+  it("evicting a void reverts its target back to synced rather than leaving it stuck voiding", async () => {
+    const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
+    await store.settleFlush(SESSION, { accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
+    await store.undo(SESSION, entry.clientEntryId);
+    const [voidOp] = await store.readOutbox(SESSION);
+
+    await store.evictOp(SESSION, voidOp!.clientEntryId);
+
+    expect(await store.readOutbox(SESSION)).toEqual([]);
+    const mine = await store.readMyEntries(SESSION);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]!.state).toBe("synced");
+  });
+});
+
+describe("enqueueLog validation", () => {
+  // Important 4: a bad op must never even reach the outbox, since one
+  // malformed op 400s the entire batch behind it.
+  it("rejects an empty or whitespace itemTypeKey", async () => {
+    await expect(store.enqueueLog(SESSION, { itemTypeKey: "", subjectUserId: "u1" })).rejects.toThrow();
+    await expect(store.enqueueLog(SESSION, { itemTypeKey: "   ", subjectUserId: "u1" })).rejects.toThrow();
+    expect(await store.readOutbox(SESSION)).toEqual([]);
+  });
+
+  it("rejects an empty subjectUserId", async () => {
+    await expect(store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "" })).rejects.toThrow();
+    expect(await store.readOutbox(SESSION)).toEqual([]);
+  });
+
+  it("trims a valid but padded itemTypeKey before storing it, so it can't 400 as unknown_item_type", async () => {
+    const entry = await store.enqueueLog(SESSION, { itemTypeKey: "  mango  ", subjectUserId: "u1" });
+    expect(entry.itemTypeKey).toBe("mango");
+
+    const [op] = await store.readOutbox(SESSION);
+    expect(op!.itemTypeKey).toBe("mango");
   });
 });
 
@@ -136,6 +277,18 @@ describe("aggregate cursor", () => {
     await store.writeAggregate(SESSION, { cursor: 7, counts: { mango: { u1: 1 } } });
 
     expect(await store.readAggregate(SESSION)).toEqual({ cursor: 7, counts: { mango: { u1: 1 } } });
+  });
+
+  // Critical 1: writeAggregate must be atomic, not check-then-act — two
+  // concurrent writers (e.g. a cold-open snapshot and an SSE push) racing on
+  // the same session must still resolve to the max cursor, regardless of
+  // which one happened to issue its write first.
+  it("resolves two concurrent writes to the max cursor even when the higher cursor is issued first", async () => {
+    const higher = store.writeAggregate(SESSION, { cursor: 20, counts: {} });
+    const lower = store.writeAggregate(SESSION, { cursor: 15, counts: {} });
+    await Promise.all([higher, lower]);
+
+    expect((await store.readAggregate(SESSION)).cursor).toBe(20);
   });
 });
 
