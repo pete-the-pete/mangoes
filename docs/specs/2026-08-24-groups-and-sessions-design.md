@@ -271,7 +271,9 @@ Carried over from v0.1's platform behavior, and consistent with it:
 - **Nobody changes their own role**, group role included — checked before the body is parsed, so a
   malformed body can never override it.
 - **Self-removal is allowed**, unless the caller is the last admin — an organizer can leave a group
-  they're done with, but cannot strand it.
+  they're done with, but cannot strand it. Scope note: the removal route requires the group-admin
+  role, so in this slice "self-removal" means an admin leaving. A plain member has no surface to
+  leave from and no route that would let them; that arrives with the member-facing slice.
 
 ### Invite flow — one door, two outcomes
 
@@ -411,10 +413,10 @@ which a human had to do in a dashboard. Everything in this slice is agent-execut
 |---|---|---|
 | 1 | Core — `cohorts` schema + types + `CohortStore` | — |
 | 2 | Core — `wouldRemoveLastCohortAdmin` pure guard | 1 |
-| 3 | Core — `cycles` schema + types + `CycleStore` (incl. close/reopen, status) | 1 |
+| 3 | Core — `cycles` schema + types + `CycleStore` (incl. close/reopen, status) | 1, 4 |
 | 4 | Core — `item_types` catalog schema + store | — |
 | 5 | Web — emoji seed data, seed script, `vercel-build` wiring, README | 4 |
-| 6 | Web — `requireCohortRole` guard + shared `lib/email.ts` | 1 |
+| 6 | Web — `requireCohortRole` guard + shared `lib/email.ts` | 1, 3, 4 |
 | 7 | Web — groups API (list, create, get, rename) | 6 |
 | 8 | Web — members API (add/invite, role change, remove, revoke) | 2, 6 |
 | 9 | Web — pending-invite consumption on first sign-in | 1 |
@@ -426,9 +428,10 @@ which a human had to do in a dashboard. Everything in this slice is agent-execut
 | 15 | Web — owner-only item-types admin page | 11, 12 |
 | 16 | Web — hold the platform-admin invariant on platform demotion (reject last group admin, cascade otherwise) — **modifies the v0.1 role PATCH and its tests** | 1, 2 |
 
-**Tasks 1, 3, and 4 all append to the same `schema.sql`.** They are logically independent but
-textually collide, so they either merge in dependency order or take trivial conflicts on rebase —
-exactly the branch-stacking question
+**Tasks 1, 3, and 4 all append to the same `schema.sql`.** Tasks 1 and 4 are independent of each
+other; Task 3 needs both, because the `cycle_item_types` join table references `cycles` and
+`item_types` and the file executes top to bottom in one statement. Merge order is 1 and 4 in either
+order, then 3 — or take trivial conflicts on rebase. This is exactly the branch-stacking question
 [the milestone-execution doc](../plans/2026-08-22-milestone-execution-workflow.md) leaves open.
 
 ### Mechanics

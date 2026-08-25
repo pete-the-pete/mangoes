@@ -42,6 +42,10 @@ and the food-emoji seed data that core is forbidden to contain.
   they refuse to run against a non-localhost host. **Web tests mock `@/lib/auth`, `@/lib/cohortAuth`,
   and `@/lib/db` with `vi.mock` and open no database connection**, exactly as
   `packages/web/tests/integration/admin-api/users-role.test.ts` does today.
+- **`packages/core`'s Vitest runs test files sequentially** (`fileParallelism: false`, set in Task 1).
+  Four test files now share one local Postgres and delete rows from tables the others reference;
+  parallel files turn that into FK violations and rows disappearing mid-test. Do not remove it to
+  make the suite faster.
 - No E2E/browser tests in this slice (spec: Testing) — UI tasks are verified manually via the dev
   server, with the steps written into each UI task.
 - Every `/admin/api/*` route handler calls its guard **itself**. Route handlers do not run layouts, so
@@ -102,6 +106,7 @@ wholesale.
 - Create: `packages/core/src/cohorts/cohortStore.test.ts`
 - Modify: `packages/core/src/db/schema.sql` (append two tables)
 - Modify: `packages/core/src/index.ts`
+- Modify: `packages/core/vitest.config.ts` (`fileParallelism: false`)
 
 **Interfaces:**
 - Consumes: `runMigrations(pool)` from `../db/migrate.js` (shipped).
@@ -132,7 +137,23 @@ CREATE TABLE IF NOT EXISTS cohort_members (
 CREATE INDEX IF NOT EXISTS cohort_members_user_idx ON cohort_members (clerk_user_id);
 ```
 
-- [ ] **Step 2: Write the types**
+- [ ] **Step 2: Stop core's DB tests running in parallel**
+
+Add to `packages/core/vitest.config.ts`, inside `test`:
+
+```ts
+    // Every DB test file here shares one local Postgres and deletes rows from
+    // it. Vitest runs files in parallel by default, which turns that sharing
+    // into FK violations and rows vanishing mid-test. Sequential files, always
+    // — this is correctness, not a speed knob.
+    fileParallelism: false,
+```
+
+Today `userRoleStore.test.ts` is the only database test, so nothing has forced this yet. This
+milestone adds three more (`cohortStore`, `cycleStore`, `itemTypeStore`), two of which delete from
+tables the others reference. Set it now, before the second file exists.
+
+- [ ] **Step 3: Write the types**
 
 `packages/core/src/cohorts/types.ts`:
 
@@ -168,7 +189,7 @@ export interface CohortAdminMembership {
 }
 ```
 
-- [ ] **Step 3: Write the failing store test**
+- [ ] **Step 4: Write the failing store test**
 
 `packages/core/src/cohorts/cohortStore.test.ts`. The guard block at the top is copied from the
 shipped `userRoleStore.test.ts` — these tests delete rows, so they refuse a non-local database:
@@ -276,12 +297,12 @@ describe("createPostgresCohortStore", () => {
 });
 ```
 
-- [ ] **Step 4: Run the test to verify it fails**
+- [ ] **Step 5: Run the test to verify it fails**
 
 Run: `docker compose up -d && npm run test -w core -- cohortStore`
 Expected: FAIL — `Cannot find module './cohortStore.js'`.
 
-- [ ] **Step 5: Implement the store**
+- [ ] **Step 6: Implement the store**
 
 `packages/core/src/cohorts/cohortStore.ts`:
 
@@ -496,7 +517,7 @@ export function createPostgresCohortStore(pool: Pool): CohortStore {
 }
 ```
 
-- [ ] **Step 6: Write the barrel files**
+- [ ] **Step 7: Write the barrel files**
 
 `packages/core/src/cohorts/index.ts`:
 
@@ -511,12 +532,12 @@ Add to `packages/core/src/index.ts`:
 export * from "./cohorts/index.js";
 ```
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [ ] **Step 8: Run the tests to verify they pass**
 
 Run: `npm run test -w core -- cohortStore && npm run typecheck -w core`
 Expected: PASS, 7 tests.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add packages/core/src/cohorts packages/core/src/db/schema.sql packages/core/src/index.ts
@@ -646,7 +667,9 @@ git commit -m "Core: last-cohort-admin guard"
 
 ## Task 3: Core — cycles schema, status derivation, and store
 
-**Blocked by:** Task 1 (cycles reference `cohorts`; also extends `removeMember`).
+**Blocked by:** Tasks 1 and 4. Task 1 because `cycles` references `cohorts` and this task extends
+`removeMember`; Task 4 because `cycle_item_types` references `item_types`, and this task's store
+tests seed and write catalog rows.
 
 **Files:**
 - Create: `packages/core/src/cycles/types.ts`
@@ -693,7 +716,19 @@ CREATE TABLE IF NOT EXISTS cycle_participants (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (cycle_id, clerk_user_id)
 );
+
+CREATE TABLE IF NOT EXISTS cycle_item_types (
+  cycle_id UUID NOT NULL REFERENCES cycles(id) ON DELETE CASCADE,
+  item_type_key TEXT NOT NULL REFERENCES item_types(key),
+  position INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (cycle_id, item_type_key)
+);
 ```
+
+The join table lives here, not in Task 4, because it references **both** `cycles` and `item_types`.
+`schema.sql` executes top to bottom in a single `pool.query`, so it must appear after both — which
+makes it Task 3's problem, and makes Task 4 (which creates `item_types` alone, with no foreign keys)
+genuinely standalone. Order in the merged file: cohorts → item types → cycles → cycle join tables.
 
 - [ ] **Step 2: Write the types**
 
@@ -1287,8 +1322,8 @@ git commit -m "Core: cycles schema, status derivation, and store"
 
 ## Task 4: Core — item type catalog schema and store
 
-**Independent — start this in parallel with Task 1.** Task 3's tests need this table to exist, so
-merge it before or with Task 3.
+**Blocked by:** nothing. Genuinely independent of Task 1 — start the two in parallel. Task 3 depends
+on this one, so merge it first.
 
 **Files:**
 - Create: `packages/core/src/itemTypes/types.ts`
@@ -1317,18 +1352,11 @@ CREATE TABLE IF NOT EXISTS item_types (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE TABLE IF NOT EXISTS cycle_item_types (
-  cycle_id UUID NOT NULL REFERENCES cycles(id) ON DELETE CASCADE,
-  item_type_key TEXT NOT NULL REFERENCES item_types(key),
-  position INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (cycle_id, item_type_key)
-);
 ```
 
-**Ordering caveat:** `cycle_item_types` references `cycles`, which Task 3 creates. `schema.sql` runs
-top to bottom in one `pool.query`, so the `cycles` block must appear **above** this block in the
-final file. When merging Tasks 3 and 4, put the cohorts tables first, then cycles, then item types.
+One table, no foreign keys, nothing referencing it yet — which is what makes this task runnable on
+its own. The `cycle_item_types` join table belongs to Task 3, since it references `cycles` as well as
+`item_types` and `schema.sql` executes top to bottom in one statement.
 
 - [ ] **Step 2: Write the types**
 
@@ -1736,8 +1764,8 @@ git commit -m "Web: emoji catalog seed data, seed script, and deploy wiring"
 
 ## Task 6: Web — cohort guard, shared email validator, store wiring
 
-**Blocked by:** Task 1 (`CohortStore`). Tasks 3 and 4's stores are wired here too, so land those first
-or add their two lines when they merge.
+**Blocked by:** Tasks 1, 3, and 4. `db.ts` imports all three store factories, so the web build fails
+if any of them is missing — this is a hard dependency, not a "wire it up when it lands."
 
 **Files:**
 - Create: `packages/web/src/lib/email.ts`
@@ -3880,8 +3908,9 @@ git commit -m "Web: item types API (catalog list, owner-only update)"
 - Create: `packages/web/src/app/admin/groups/GroupsTable.tsx`
 - Create: `packages/web/src/app/admin/groups/NewGroupModal.tsx`
 - Modify: `packages/web/src/app/admin/layout.tsx` (render the nav)
-- Modify: `packages/web/src/app/admin/page.tsx` (drop its now-duplicated `<h1>Users</h1>` if the nav
-  supplies the heading; keep the table unchanged)
+
+`admin/page.tsx` is not touched — the nav renders links, not a page heading, so its `<h1>Users</h1>`
+stays.
 
 **Interfaces:**
 - Consumes: `getCurrentUserRole`, `cohortStore`, `POST /admin/api/groups`.
@@ -5190,8 +5219,8 @@ BODY
 )"
 ```
 
-Dependencies per the spec's table: 2←1; 3←1; 5←4; 6←1; 7←6; 8←2,6; 9←1; 10←3,6; 11←4; 12←7;
-13←8,10,12; 14←10,11,13; 15←11,12; 16←1,2. Tasks 1 and 4 have none.
+Dependencies: 2←1; 3←1,4; 5←4; 6←1,3,4; 7←6; 8←2,6; 9←1; 10←3,6; 11←4; 12←7; 13←8,10,12;
+14←10,11,13; 15←11,12; 16←1,2. Tasks 1 and 4 have none and can run in parallel.
 
 - [ ] **Step 4: Fill in the real issue numbers**
 
