@@ -144,7 +144,11 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
   voids_entry_id UUID REFERENCES ledger_entries(id),
   client_entry_id UUID NOT NULL,
   occurred_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- clock_timestamp(), not now(): now() returns transaction-START time, and
+  -- appends queue on the cycle row lock, so transactions that begin together
+  -- would all share a timestamp and commit order would be unobservable. This
+  -- column records when the row was actually written.
+  created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   CHECK (kind = 'log' OR voids_entry_id IS NOT NULL),
   UNIQUE (cycle_id, seq),
   UNIQUE (cycle_id, client_entry_id)
@@ -542,6 +546,22 @@ export function createPostgresLedgerStore(pool: Pool): LedgerStore {
         );
         const seen = new Set(existing.rows.map((r) => r.client_entry_id));
 
+        // Item types are validated UP FRONT, not by catching the foreign key
+        // violation. In Postgres a failed statement poisons the whole
+        // transaction — every later statement errors until rollback — so one bad
+        // key would take the rest of the batch down with it.
+        const requestedKeys = ops
+          .map((op) => op.itemTypeKey)
+          .filter((key): key is string => typeof key === "string");
+        const knownKeys = new Set<string>();
+        if (requestedKeys.length > 0) {
+          const catalog = await client.query<{ key: string }>(
+            "SELECT key FROM item_types WHERE key = ANY($1::text[])",
+            [requestedKeys],
+          );
+          for (const row of catalog.rows) knownKeys.add(row.key);
+        }
+
         for (const op of ops) {
           if (seen.has(op.clientEntryId)) {
             duplicates.push(op.clientEntryId);
@@ -594,6 +614,10 @@ export function createPostgresLedgerStore(pool: Pool): LedgerStore {
               rejected.push({ clientEntryId: op.clientEntryId, reason: "malformed_op" });
               continue;
             }
+            if (!knownKeys.has(op.itemTypeKey)) {
+              rejected.push({ clientEntryId: op.clientEntryId, reason: "unknown_item_type" });
+              continue;
+            }
             itemTypeKey = op.itemTypeKey;
             subjectUserId = op.subjectUserId === undefined ? ctx.actorUserId : op.subjectUserId;
             if (!ctx.canWriteForOthers && subjectUserId !== ctx.actorUserId) {
@@ -603,24 +627,14 @@ export function createPostgresLedgerStore(pool: Pool): LedgerStore {
           }
 
           seq += 1;
-          try {
-            await client.query(
-              `INSERT INTO ledger_entries
-                 (cycle_id, seq, kind, item_type_key, subject_user_id, actor_user_id,
-                  voids_entry_id, client_entry_id, occurred_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-              [cycleId, seq, op.kind, itemTypeKey, subjectUserId, ctx.actorUserId,
-               voidsEntryId, op.clientEntryId, op.occurredAt],
-            );
-          } catch (error) {
-            // Only a genuinely unknown item type reaches here — the FK is the check.
-            seq -= 1;
-            if ((error as { code?: string }).code === "23503") {
-              rejected.push({ clientEntryId: op.clientEntryId, reason: "unknown_item_type" });
-              continue;
-            }
-            throw error;
-          }
+          await client.query(
+            `INSERT INTO ledger_entries
+               (cycle_id, seq, kind, item_type_key, subject_user_id, actor_user_id,
+                voids_entry_id, client_entry_id, occurred_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [cycleId, seq, op.kind, itemTypeKey, subjectUserId, ctx.actorUserId,
+             voidsEntryId, op.clientEntryId, op.occurredAt],
+          );
           accepted.push(op.clientEntryId);
           seen.add(op.clientEntryId);
         }
@@ -915,6 +929,36 @@ export function groupTotal(aggregate: Aggregate, itemTypeKey: string): number {
   }
   return total;
 }
+```
+
+- [ ] **Step 3b: Pin the fold against the SQL aggregate**
+
+Add to `packages/core/src/ledger/ledgerStore.test.ts`. `snapshot()` computes counts in SQL for a cold
+open; every client computes the same counts by folding deltas. Nothing otherwise forces those two
+implementations to agree, and if they drift a member's leaderboard quietly depends on whether they
+opened cold or caught up — a divergence that never surfaces as an error.
+
+```ts
+it("agrees with foldEntries over the same history", async () => {
+  const cycle = await makeCycle();
+  const mine = log("mango");
+  await store.append(cycle.id, MEMBER, [mine, log("taco")]);
+  await store.append(cycle.id, { ...MEMBER, actorUserId: "u2" }, [log("mango"), log("mango")]);
+  await store.append(cycle.id, ADMIN, [{ ...log("taco"), subjectUserId: null }]);
+  await store.append(cycle.id, ADMIN, [{ ...log("mango"), subjectUserId: "u2" }]);
+  await store.append(cycle.id, MEMBER, [voidOf(mine.clientEntryId)]);
+
+  const fromSql = await store.snapshot(cycle.id);
+  const all = await store.readSince(cycle.id, 0, 1000);
+  const fromFold = foldEntries(emptyAggregate(), all.entries);
+
+  expect(fromFold.counts).toEqual(fromSql.counts);
+  expect(fromFold.cursor).toBe(fromSql.cursor);
+  // Not a vacuous pass: the history above exercises every branch.
+  expect(fromSql.counts["u1"]?.["mango"]).toBe(0);
+  expect(fromSql.counts["u2"]?.["mango"]).toBe(3);
+  expect(fromSql.counts[UNTAGGED]?.["taco"]).toBe(1);
+});
 ```
 
 - [ ] **Step 4: Export it**
@@ -3222,6 +3266,13 @@ Record the result in a comment on #70.
 - [ ] A freshly-invited platform `member` who is added to a group and a session can sign in, land on
       that session, tap, and see their count — the gap v0.2 named, closed.
 - [ ] No new lint regressions beyond the pre-existing #21 breakage.
+
+## Shipped So Far
+
+| Task | Issue | PR | Notes |
+|---|---|---|---|
+| 1 | #55 | #73 (merged) | Two corrections folded back into this doc: `clock_timestamp()` over `now()`, and item-type pre-validation instead of catching the FK violation |
+| 2 | #56 | #74 | Added Step 3b, the fold-vs-SQL cross-check |
 
 ## Spec Deviations Recorded Here
 
