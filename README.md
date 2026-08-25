@@ -55,6 +55,11 @@ The test suite reads `.env.dev` then `.env` with the same precedence as
 `npm run migrate -w core`, so both commands always agree on which database
 they're talking to.
 
+Core's store tests empty `item_types` as well, so a test run leaves the local
+emoji catalog wiped. Re-run `npm run seed -w web` before poking at the admin UI
+— an empty catalog makes session creation refuse to submit, which looks like a
+bug and isn't.
+
 ## Deployments
 
 Vercel's root directory is `packages/web`, so it runs that package's scripts.
