@@ -208,8 +208,9 @@ group again, and no existing guard would have said a word.
 So `PATCH /admin/api/users/:clerkUserId/role` gains a group-aware check, applied when the target role
 is `member`:
 
-- If the target is the **last admin of any group**, reject with `400` naming those groups — the same
-  shape as `wouldRemoveLastOwner`, and the fix is the same: give that group another admin first.
+- If the target is the **last admin of any group**, reject with `409` naming those groups — the same
+  status and shape as the shipped `wouldRemoveLastOwner` rejection, and the fix is the same: give
+  that group another admin first.
 - Otherwise **cascade** their `cohort_members.role` to `member` everywhere, in the same transaction
   as the platform-role write, so no stale admin row survives.
 
@@ -228,7 +229,7 @@ a plain `404`.
 |---|---|---|
 | `GET /admin/api/groups` | platform `owner`/`admin` | `owner` sees all groups; `admin` sees groups they belong to |
 | `POST /admin/api/groups` | platform `owner`/`admin` | `{ name }`. Creator is inserted as group admin **in the same transaction** |
-| `GET /admin/api/groups/:groupId` | group member \| `owner` | group + members (Clerk identity joined) + sessions + pending invites |
+| `GET /admin/api/groups/:groupId` | group member \| `owner` | the group and its members. Sessions come from the sessions route below; pending invites are read live from Clerk by the page, since they are not local state |
 | `PATCH /admin/api/groups/:groupId` | group admin \| `owner` | `{ name }` |
 | `POST /admin/api/groups/:groupId/members` | group admin \| `owner` | `{ email }` — see invite flow |
 | `PATCH /admin/api/groups/:groupId/members/:clerkUserId` | group admin \| `owner` | `{ role }`, last-admin guarded, invariant enforced |
@@ -350,7 +351,7 @@ failure, and the caller's own row rendered disabled where the API would reject t
 |---|---|
 | Non-member hits a group route | `403`, no information about whether the group exists |
 | Session id doesn't belong to the named group | `404` — not a `403`, so the two cases aren't distinguishable by probing |
-| Last group admin removed or demoted | `400` with a clear message; guard runs before any write |
+| Last group admin removed or demoted | `409` with a clear message; guard runs before any write. `409` rather than `400` to match the shipped last-owner rejection — the request is well-formed, the state conflicts |
 | Group-admin promotion for a platform `member` | `400` naming the fix: a Super Admin must promote them first |
 | Caller changes their own group role | `403`, checked before the body is parsed |
 | Session create with a disabled or unknown item type | `400`, field-level, no partial write |
@@ -359,7 +360,7 @@ failure, and the caller's own row rendered disabled where the API would reject t
 | Clerk API error (invite, revoke, metadata clear) | Surfaced with Clerk's own message, `502`, never swallowed |
 | Session create with an empty participant list | `400` — an explicit `[]` is rejected rather than passing vacuously |
 | No **enabled** item types (unseeded catalog, or the Super Admin disabled everything) | Session create is blocked with a message pointing at the catalog page, and at the seed step when the table is empty |
-| Platform demotion of a group's last admin | `400` naming the affected groups; the platform role is not written |
+| Platform demotion of a group's last admin | `409` naming the affected groups; the platform role is not written |
 
 ## Testing
 
@@ -370,7 +371,11 @@ status derivation including the overdue-but-live case), and store tests against 
 Postgres: cohort creation inserting the creator as admin atomically, membership CRUD, cycle CRUD with
 participants and item-type links, close/reopen, catalog list and update.
 
-**`packages/web`** — route handler tests against a test Postgres with the Clerk client faked:
+**`packages/web`** — route handler tests with `@/lib/auth`, `@/lib/cohortAuth`, and `@/lib/db`
+replaced by `vi.mock`, exactly as the shipped `users-role.test.ts` does. Web tests open no database
+connection at all; real-Postgres coverage lives in core's store tests, and web's job is to prove the
+handler's branching. (v0.1's spec said "against a test Postgres" and the implementation landed this
+way instead — this records the convention that actually exists.)
 
 - Guard behavior: non-member `403`, group admin passes, platform `owner` passes as superuser,
   unauthenticated `401`, and a **plain platform member who is a group member still gets `403`** from
