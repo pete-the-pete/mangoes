@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
 import { requireRole } from "@/lib/auth";
-
-const GMAIL_PATTERN = /^[^\s@]+@gmail\.com$/i;
+import { isGmailAddress } from "@/lib/email";
 
 /**
  * The public origin this request arrived on, used to build the invitation's
@@ -41,7 +40,7 @@ export async function POST(request: Request) {
   const email = typeof body.email === "string" ? body.email.trim() : "";
   const role = body.role;
 
-  if (!GMAIL_PATTERN.test(email)) {
+  if (!isGmailAddress(email)) {
     return NextResponse.json(
       { error: "Email must be a @gmail.com address" },
       { status: 400 },
