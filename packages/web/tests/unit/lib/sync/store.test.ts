@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { describe, it, expect, beforeEach } from "vitest";
-import { openSyncStore, toWireOp } from "@/lib/sync/store";
+import { openSyncStore, toWireOp, type FlushOutcome } from "@/lib/sync/store";
 import { parseAppendOps } from "@/lib/appendOps";
 
 const SESSION = "s1";
@@ -10,6 +10,17 @@ beforeEach(async () => {
   store = await openSyncStore();
   await store.clearSession(SESSION);
 });
+
+/**
+ * Claims every currently-unclaimed op in the session via a fresh attempt and
+ * settles it with the given outcome — the common "enqueue, then settle" shape
+ * most tests below only care about at the outcome level, not the attempt
+ * bookkeeping itself (that's covered explicitly under "flush attempts").
+ */
+async function settle(outcome: FlushOutcome): Promise<void> {
+  const { attemptId } = await store.beginFlush(SESSION);
+  await store.settleFlush(SESSION, attemptId, outcome);
+}
 
 describe("outbox", () => {
   it("starts empty with an empty aggregate", async () => {
@@ -36,7 +47,7 @@ describe("outbox", () => {
   // Undo case 2: a real append that propagates to everyone.
   it("undo on a synced entry enqueues a void and marks the entry voiding", async () => {
     const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
-    await store.settleFlush(SESSION, { accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
+    await settle({ accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
     await store.undo(SESSION, entry.clientEntryId);
 
     const outbox = await store.readOutbox(SESSION);
@@ -50,7 +61,7 @@ describe("outbox", () => {
 
   it("copies the target's item and subject onto a void op, for immediate display", async () => {
     const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
-    await store.settleFlush(SESSION, { accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
+    await settle({ accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
     await store.undo(SESSION, entry.clientEntryId);
 
     const [op] = await store.readOutbox(SESSION);
@@ -61,9 +72,7 @@ describe("outbox", () => {
   it("clears accepted and duplicate ops from the outbox on settle", async () => {
     const a = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
     const b = await store.enqueueLog(SESSION, { itemTypeKey: "taco", subjectUserId: "u1" });
-    await store.settleFlush(SESSION, {
-      accepted: [a.clientEntryId], duplicates: [b.clientEntryId], rejected: [], cursor: 2,
-    });
+    await settle({ accepted: [a.clientEntryId], duplicates: [b.clientEntryId], rejected: [], cursor: 2 });
     expect(await store.readOutbox(SESSION)).toEqual([]);
     for (const entry of await store.readMyEntries(SESSION)) {
       expect(entry.state).toBe("synced");
@@ -72,7 +81,7 @@ describe("outbox", () => {
 
   it("drops a rejected op rather than retrying it forever", async () => {
     const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
-    await store.settleFlush(SESSION, {
+    await settle({
       accepted: [], duplicates: [],
       rejected: [{ clientEntryId: entry.clientEntryId, reason: "cycle_closed", message: "closed" }],
       cursor: 0,
@@ -94,11 +103,11 @@ describe("outbox", () => {
 
   it("settles an accepted/duplicate void by dropping the target from myEntries", async () => {
     const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
-    await store.settleFlush(SESSION, { accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
+    await settle({ accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
     await store.undo(SESSION, entry.clientEntryId);
     const [voidOp] = await store.readOutbox(SESSION);
 
-    await store.settleFlush(SESSION, { accepted: [voidOp!.clientEntryId], duplicates: [], rejected: [], cursor: 2 });
+    await settle({ accepted: [voidOp!.clientEntryId], duplicates: [], rejected: [], cursor: 2 });
 
     expect(await store.readOutbox(SESSION)).toEqual([]);
     expect(await store.readMyEntries(SESSION)).toEqual([]);
@@ -106,11 +115,11 @@ describe("outbox", () => {
 
   it("settles a rejected void by reverting the target from voiding back to synced", async () => {
     const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
-    await store.settleFlush(SESSION, { accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
+    await settle({ accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
     await store.undo(SESSION, entry.clientEntryId);
     const [voidOp] = await store.readOutbox(SESSION);
 
-    await store.settleFlush(SESSION, {
+    await settle({
       accepted: [], duplicates: [],
       rejected: [{ clientEntryId: voidOp!.clientEntryId, reason: "cycle_closed", message: "closed" }],
       cursor: 1,
@@ -126,11 +135,11 @@ describe("outbox", () => {
   // it can only ever produce another already_voided. Drop the target instead.
   it("settles an already_voided void rejection by dropping the target, not reviving it", async () => {
     const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
-    await store.settleFlush(SESSION, { accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
+    await settle({ accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
     await store.undo(SESSION, entry.clientEntryId);
     const [voidOp] = await store.readOutbox(SESSION);
 
-    await store.settleFlush(SESSION, {
+    await settle({
       accepted: [], duplicates: [],
       rejected: [{ clientEntryId: voidOp!.clientEntryId, reason: "already_voided", message: "already removed" }],
       cursor: 1,
@@ -141,63 +150,154 @@ describe("outbox", () => {
   });
 });
 
-describe("beginFlush / abortFlush", () => {
-  it("marks every returned op in-flight, durably", async () => {
+describe("flush attempts", () => {
+  it("beginFlush claims every unclaimed op with a fresh attemptId, durably", async () => {
     await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
-    const ops = await store.beginFlush(SESSION);
-    expect(ops).toHaveLength(1);
-    expect(ops[0]!.inFlight).toBe(true);
+    const attempt = await store.beginFlush(SESSION);
+    expect(attempt.ops).toHaveLength(1);
+    expect(attempt.ops[0]!.attemptId).toBe(attempt.attemptId);
 
     const stored = await store.readOutbox(SESSION);
-    expect(stored[0]!.inFlight).toBe(true);
+    expect(stored[0]!.attemptId).toBe(attempt.attemptId);
   });
 
-  it("abortFlush clears the marker so a failed flush is retried, not stuck in flight", async () => {
+  it("beginFlush returns an empty claim, not an error, when there's nothing new to claim", async () => {
+    await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
+    await store.beginFlush(SESSION); // claims the only op
+
+    const second = await store.beginFlush(SESSION);
+    expect(second.ops).toEqual([]);
+    expect(typeof second.attemptId).toBe("string");
+  });
+
+  it("abortFlush releases only its own attempt's ops so a failed flush is retried, not stuck claimed", async () => {
     const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
-    await store.beginFlush(SESSION);
-    await store.abortFlush(SESSION);
+    const attempt = await store.beginFlush(SESSION);
+    await store.abortFlush(SESSION, attempt.attemptId);
 
     const outbox = await store.readOutbox(SESSION);
-    expect(outbox[0]!.inFlight).toBe(false);
+    expect(outbox[0]!.attemptId).toBeUndefined();
 
-    // Since it's no longer in flight, undo can go back to safely deleting it.
+    // Since it's unclaimed again, undo can go back to safely deleting it.
     await store.undo(SESSION, entry.clientEntryId);
     expect(await store.readOutbox(SESSION)).toEqual([]);
     expect(await store.readMyEntries(SESSION)).toEqual([]);
+  });
+
+  // Important finding, fix round 2: abortFlush must be scoped to one attempt,
+  // not session-wide — otherwise aborting a failed attempt A can un-claim ops
+  // a second, still-live attempt B already owns, reopening the exact hole
+  // Critical 2 closed (undo could then delete an op that may have reached the
+  // server).
+  it("keeps a second attempt's claimed ops in-flight when an unrelated first attempt aborts", async () => {
+    const a = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
+    const attemptA = await store.beginFlush(SESSION);
+    expect(attemptA.ops.map((op) => op.clientEntryId)).toEqual([a.clientEntryId]);
+
+    // A new op arrives after A's claim closed over the outbox — it's
+    // unclaimed, so a second attempt can pick it up independently.
+    const b = await store.enqueueLog(SESSION, { itemTypeKey: "taco", subjectUserId: "u1" });
+    const attemptB = await store.beginFlush(SESSION);
+    expect(attemptB.ops.map((op) => op.clientEntryId)).toEqual([b.clientEntryId]);
+
+    await store.abortFlush(SESSION, attemptA.attemptId);
+
+    const outbox = await store.readOutbox(SESSION);
+    const aOp = outbox.find((op) => op.clientEntryId === a.clientEntryId)!;
+    const bOp = outbox.find((op) => op.clientEntryId === b.clientEntryId)!;
+    expect(aOp.attemptId).toBeUndefined(); // released by A's abort
+    expect(bOp.attemptId).toBe(attemptB.attemptId); // untouched — still B's
+
+    // And undo on b, still claimed by the live attempt B, must void rather
+    // than delete — it may already have reached the server.
+    await store.undo(SESSION, b.clientEntryId);
+    const afterUndo = await store.readOutbox(SESSION);
+    expect(afterUndo.some((op) => op.kind === "void" && op.voidsClientEntryId === b.clientEntryId)).toBe(true);
+    const mine = await store.readMyEntries(SESSION);
+    expect(mine.find((e) => e.clientEntryId === b.clientEntryId)!.state).toBe("voiding");
+  });
+
+  it("settleFlush ignores a stale response whose op has since been reclaimed by a different, live attempt", async () => {
+    const a = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
+    const attemptA = await store.beginFlush(SESSION);
+
+    // A's response never arrives; abandoned and released, then reclaimed by a
+    // fresh attempt C. A's (now-stale) response finally shows up — settling
+    // under A's id must not touch what C currently owns.
+    await store.abortFlush(SESSION, attemptA.attemptId);
+    const attemptC = await store.beginFlush(SESSION);
+    expect(attemptC.ops.map((op) => op.clientEntryId)).toEqual([a.clientEntryId]);
+
+    await store.settleFlush(SESSION, attemptA.attemptId, {
+      accepted: [a.clientEntryId], duplicates: [], rejected: [], cursor: 1,
+    });
+
+    // Still owned by C, untouched by the stale settle under A.
+    const outbox = await store.readOutbox(SESSION);
+    expect(outbox[0]!.attemptId).toBe(attemptC.attemptId);
+    expect((await store.readMyEntries(SESSION))[0]!.state).toBe("pending");
+  });
+
+  it("settleFlush ignores an outcome id whose op is owned by a concurrently live second attempt", async () => {
+    const a = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
+    const attemptA = await store.beginFlush(SESSION);
+
+    // A second op arrives and gets claimed by a second, still-live attempt
+    // while A is genuinely in flight (no abort involved on either side).
+    const b = await store.enqueueLog(SESSION, { itemTypeKey: "taco", subjectUserId: "u1" });
+    const attemptB = await store.beginFlush(SESSION);
+    expect(attemptB.ops.map((op) => op.clientEntryId)).toEqual([b.clientEntryId]);
+
+    // A's response arrives and, through a caller bug, lists B's op id too —
+    // settling under A's attemptId must not touch it; only A's own op (a).
+    await store.settleFlush(SESSION, attemptA.attemptId, {
+      accepted: [a.clientEntryId, b.clientEntryId], duplicates: [], rejected: [], cursor: 1,
+    });
+
+    const outbox = await store.readOutbox(SESSION);
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]!.clientEntryId).toBe(b.clientEntryId);
+    expect(outbox[0]!.attemptId).toBe(attemptB.attemptId);
+
+    const mine = await store.readMyEntries(SESSION);
+    expect(mine.find((e) => e.clientEntryId === a.clientEntryId)!.state).toBe("synced");
+    expect(mine.find((e) => e.clientEntryId === b.clientEntryId)!.state).toBe("pending");
   });
 });
 
 // Critical 2: undo racing an in-flight flush must never delete an op that may
 // have already reached the server.
 describe("undo racing an in-flight flush", () => {
-  it("voids rather than deletes an in-flight log, and settling the accepted response doesn't resurrect it as synced", async () => {
+  it("voids rather than deletes a claimed log, and settling the accepted response doesn't resurrect it as synced", async () => {
     const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
-    const flushed = await store.beginFlush(SESSION);
-    expect(flushed[0]!.inFlight).toBe(true);
+    const attempt = await store.beginFlush(SESSION);
+    expect(attempt.ops[0]!.attemptId).toBe(attempt.attemptId);
 
     await store.undo(SESSION, entry.clientEntryId);
 
-    // The original (in-flight) log op is still queued, alongside a new void.
+    // The original (claimed) log op is still queued, alongside a new void.
     const outbox = await store.readOutbox(SESSION);
     expect(outbox.map((op) => op.kind).sort()).toEqual(["log", "void"]);
     expect((await store.readMyEntries(SESSION))[0]!.state).toBe("voiding");
 
     // The flush's response comes back accepted for the original log op — this
     // must not flip the entry back to "synced".
-    await store.settleFlush(SESSION, { accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
+    await store.settleFlush(SESSION, attempt.attemptId, {
+      accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1,
+    });
     const mine = await store.readMyEntries(SESSION);
     expect(mine).toHaveLength(1);
     expect(mine[0]!.state).toBe("voiding");
   });
 
-  it("drops the entry and the orphaned void when an in-flight log is rejected after a void was queued against it", async () => {
+  it("drops the entry and the orphaned void when a claimed log is rejected after a void was queued against it", async () => {
     const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
-    await store.beginFlush(SESSION); // marks the log in-flight
+    const attempt = await store.beginFlush(SESSION); // claims the log
     await store.undo(SESSION, entry.clientEntryId); // races the flush: voids, doesn't delete
 
-    expect(await store.readOutbox(SESSION)).toHaveLength(2); // the in-flight log + the new void
+    expect(await store.readOutbox(SESSION)).toHaveLength(2); // the claimed log + the new void
 
-    await store.settleFlush(SESSION, {
+    await store.settleFlush(SESSION, attempt.attemptId, {
       accepted: [], duplicates: [],
       rejected: [{ clientEntryId: entry.clientEntryId, reason: "unknown_target", message: "gone" }],
       cursor: 0,
@@ -228,7 +328,7 @@ describe("evictOp", () => {
 
   it("evicting a void reverts its target back to synced rather than leaving it stuck voiding", async () => {
     const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
-    await store.settleFlush(SESSION, { accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
+    await settle({ accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
     await store.undo(SESSION, entry.clientEntryId);
     const [voidOp] = await store.readOutbox(SESSION);
 
@@ -295,7 +395,7 @@ describe("aggregate cursor", () => {
 describe("wire compatibility", () => {
   it("projects a log and a void op into a batch the real parser accepts", async () => {
     const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: "u1" });
-    await store.settleFlush(SESSION, { accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
+    await settle({ accepted: [entry.clientEntryId], duplicates: [], rejected: [], cursor: 1 });
     await store.undo(SESSION, entry.clientEntryId);
 
     // Simulate a fresh log queued alongside the void from above, so the batch

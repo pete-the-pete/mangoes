@@ -38,13 +38,17 @@ export interface OutboxOp {
   voidsClientEntryId?: string;
   occurredAt: string;
   /**
-   * True while this op is part of a flush whose response hasn't settled yet
-   * (`beginFlush` set it; `settleFlush` clears it by deleting the row, and
-   * `abortFlush` clears it directly if the flush never got a response at all).
-   * An in-flight op MAY already have reached the server, even though this
-   * store hasn't heard back — that's what makes undo's second case necessary.
+   * The id of the flush attempt that currently owns this op, set by
+   * `beginFlush` and cleared by `settleFlush` (via deletion) or `abortFlush`.
+   * Ownership is per-op, not per-session: an op with no attemptId has never
+   * been claimed (or was released by an abort) and is fair game for the next
+   * `beginFlush` call; an op WITH an attemptId belongs exclusively to that one
+   * flush attempt, which MAY already have reached the server even though this
+   * store hasn't heard back — that's what makes undo's second case necessary,
+   * and what stops one attempt's abort from touching another, still-live
+   * attempt's ops.
    */
-  inFlight?: boolean;
+  attemptId?: string;
 }
 
 export interface FlushOutcome {
@@ -66,7 +70,7 @@ export interface WireAppendOp {
 /**
  * Projects a local OutboxOp onto the wire schema the write API validates.
  *
- * A whitelist, not a blacklist: `sessionId`, `subjectUserId`, and `inFlight` are
+ * A whitelist, not a blacklist: `sessionId`, `subjectUserId`, and `attemptId` are
  * local/bookkeeping fields the server never sees. `parseAppendOps` 400s the
  * ENTIRE batch on the first op with an unexpected `subjectUserId` key present at
  * all (member writes always credit the actor), so this store must never hand the
@@ -82,6 +86,12 @@ export function toWireOp(op: OutboxOp): WireAppendOp {
     voidsClientEntryId: op.voidsClientEntryId,
     occurredAt: op.occurredAt,
   };
+}
+
+/** Return of `beginFlush`: the attempt's id, and the ops it actually claimed. */
+export interface FlushAttempt {
+  attemptId: string;
+  ops: OutboxOp[];
 }
 
 interface SyncDB extends DBSchema {
@@ -158,51 +168,61 @@ export async function openSyncStore() {
   }
 
   /**
-   * Marks every currently-queued op for a session as in-flight and returns
-   * them, in flush order, in one transaction. Once returned, an op is
-   * considered to MAYBE have reached the server — `undo` treats it accordingly
-   * — until `settleFlush` resolves it or `abortFlush` clears the marker back.
+   * Claims every currently-UNCLAIMED op in a session's outbox for a fresh flush
+   * attempt (a new `attemptId`), stamps them, and returns both. Ownership is
+   * per-op: an op already carrying another attempt's id (that attempt hasn't
+   * settled or aborted yet) is left alone and NOT included in the claim — so
+   * calling this again before a prior attempt resolves never "silently claims
+   * more" of that attempt's ops. If there is nothing unclaimed, it still
+   * returns a fresh `attemptId` paired with an empty `ops` array (an explicit
+   * empty claim, not an error) — safe for the caller to `abortFlush`/
+   * `settleFlush` against with nothing to do.
    *
-   * PRECONDITION for callers: at most one flush in flight per session at a
-   * time. `abortFlush` clears the marker on every op currently marked
-   * in-flight for the session, with no way to scope it to one flush attempt —
-   * if a second `beginFlush` were issued before the first settled or aborted,
-   * an `abortFlush` for the first could un-mark ops that belong to the second,
-   * live one, and `undo` would then wrongly take the delete path on an op that
-   * may have already reached the server. Serialize flush attempts per session
-   * (queue, or a simple in-progress flag) rather than overlapping them.
+   * Once claimed, an op is considered to MAYBE have reached the server —
+   * `undo` treats it accordingly — until `settleFlush` resolves it or
+   * `abortFlush` releases it back to unclaimed.
+   *
+   * Contract for the caller: each returned claim is exactly one HTTP request's
+   * worth of ops (`ops.map(toWireOp)` -> one `POST /entries` body). Two
+   * overlapping `beginFlush` calls are safe and produce two independent
+   * claims with disjoint ops — but each claim's response must be settled (or
+   * aborted) with the `attemptId` it was issued, never a different attempt's.
    */
-  async function beginFlush(sessionId: string): Promise<OutboxOp[]> {
+  async function beginFlush(sessionId: string): Promise<FlushAttempt> {
+    const attemptId = crypto.randomUUID();
     const tx = db.transaction("outbox", "readwrite");
     const store = tx.objectStore("outbox");
-    const ops = await store.index("bySession").getAll(sessionId);
-    const marked: OutboxOp[] = [];
-    for (const op of ops) {
-      const withFlag: OutboxOp = { ...op, inFlight: true };
-      await store.put(withFlag);
-      marked.push(withFlag);
+    const all = await store.index("bySession").getAll(sessionId);
+    const claimed: OutboxOp[] = [];
+    for (const op of all) {
+      if (op.attemptId !== undefined) continue; // owned by another live attempt
+      const withAttempt: OutboxOp = { ...op, attemptId };
+      await store.put(withAttempt);
+      claimed.push(withAttempt);
     }
     await tx.done;
-    return marked.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+    claimed.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+    return { attemptId, ops: claimed };
   }
 
   /**
-   * Clears the in-flight marker for every op in a session's outbox, without
-   * settling any of them — for when a flush's request never got a response at
-   * all (network failure, timeout) rather than a real per-op outcome, so those
-   * ops are retried on the next flush instead of being stuck "maybe in flight"
-   * forever.
-   *
-   * Shares `beginFlush`'s one-flush-at-a-time-per-session precondition: this
-   * clears in-flight on EVERY op in the session, not just the ops from one
-   * particular flush attempt.
+   * Releases every op claimed by exactly this attempt — for when a flush's
+   * request never got a response at all (network failure, timeout) rather than
+   * a real per-op outcome, so those ops are eligible for the next `beginFlush`
+   * instead of being stuck "maybe in flight" forever. Scoped strictly to
+   * `attemptId`: an op some other, still-live attempt claimed in the meantime
+   * is left untouched.
    */
-  async function abortFlush(sessionId: string): Promise<void> {
+  async function abortFlush(sessionId: string, attemptId: string): Promise<void> {
     const tx = db.transaction("outbox", "readwrite");
     const store = tx.objectStore("outbox");
-    const ops = await store.index("bySession").getAll(sessionId);
-    for (const op of ops) {
-      if (op.inFlight) await store.put({ ...op, inFlight: false });
+    const all = await store.index("bySession").getAll(sessionId);
+    for (const op of all) {
+      if (op.attemptId === attemptId) {
+        const released: OutboxOp = { ...op };
+        delete released.attemptId;
+        await store.put(released);
+      }
     }
     await tx.done;
   }
@@ -250,9 +270,10 @@ export async function openSyncStore() {
    * synced at all).
    *
    * This only covers the simple case (target definitely synced, nothing
-   * in-flight). `undo` has one more case to dispatch — a target that's still in
-   * the outbox but marked in-flight, which MAY have already reached the server
-   * — so it doesn't delegate here; it shares the void-queuing write directly.
+   * claimed by a flush attempt). `undo` has one more case to dispatch — a
+   * target that's still in the outbox but claimed by an attempt, which MAY
+   * have already reached the server — so it doesn't delegate here; it shares
+   * the void-queuing write directly.
    */
   async function enqueueVoid(sessionId: string, voidsClientEntryId: string): Promise<void> {
     const tx = db.transaction(["outbox", "myEntries"], "readwrite");
@@ -281,15 +302,15 @@ export async function openSyncStore() {
   /**
    * Undo is two cases, and the second is where bugs live.
    *
-   *  - target still queued and NOT in flight (never reached the server): drop
-   *    it from the outbox and from myEntries. No tombstone ever reaches the
-   *    server, because the server never heard about it.
-   *  - target already synced, OR still queued but in flight (a flush has sent
-   *    it and this store hasn't heard back — it MAY already have reached the
-   *    server): enqueue a void. That is a real append — it takes a sequence
-   *    and propagates to every other client. The non-negotiable invariant: an
-   *    op that may have reached the server is never deleted locally, only
-   *    voided.
+   *  - target still queued and UNCLAIMED by any flush attempt (never reached
+   *    the server): drop it from the outbox and from myEntries. No tombstone
+   *    ever reaches the server, because the server never heard about it.
+   *  - target already synced, OR still queued but claimed by a live attempt (a
+   *    flush has sent it and this store hasn't heard back — it MAY already
+   *    have reached the server): enqueue a void. That is a real append — it
+   *    takes a sequence and propagates to every other client. The
+   *    non-negotiable invariant: an op that may have reached the server is
+   *    never deleted locally, only voided.
    */
   async function undo(sessionId: string, clientEntryId: string): Promise<void> {
     const tx = db.transaction(["outbox", "myEntries"], "readwrite");
@@ -304,15 +325,15 @@ export async function openSyncStore() {
     }
 
     const op = await outbox.get(clientEntryId);
-    if (op && op.kind === "log" && !op.inFlight) {
+    if (op && op.kind === "log" && op.attemptId === undefined) {
       await outbox.delete(clientEntryId);
       await mine.delete(clientEntryId);
       await tx.done;
       return;
     }
 
-    // Either already synced (no outbox row left), or still queued but
-    // in-flight: never delete, always void.
+    // Either already synced (no outbox row left), or still queued but claimed
+    // by a live flush attempt: never delete, always void.
     const voidClientEntryId = crypto.randomUUID();
     await outbox.put({
       clientEntryId: voidClientEntryId,
@@ -338,7 +359,8 @@ export async function openSyncStore() {
    * Evicting a "void" reverts its target back to "synced" first, so the target
    * is never left stuck "voiding" with nothing left in the outbox to resolve
    * it. Evicting a "log" drops its myEntries record too (same as an outright
-   * rejection).
+   * rejection). Not attempt-scoped — this is an explicit, manual recovery
+   * action, not part of the flush lifecycle.
    */
   async function evictOp(sessionId: string, clientEntryId: string): Promise<void> {
     const tx = db.transaction(["outbox", "myEntries"], "readwrite");
@@ -366,14 +388,22 @@ export async function openSyncStore() {
   }
 
   /**
-   * Settles a flush response against the outbox and myEntries.
+   * Settles one flush attempt's response against the outbox and myEntries.
+   * `attemptId` must match — an id in `outcome` whose outbox row is currently
+   * owned by a DIFFERENT, still-live attempt is left untouched (defends
+   * against a stale response from an aborted/superseded attempt touching ops a
+   * newer attempt has since claimed). If the outbox row is already gone
+   * (e.g. evicted in the interim) settling still proceeds via the durable
+   * myEntries-based correlation below — there's no other live attempt to
+   * conflict with in that case.
    *
    * Deliberately does NOT depend on the outbox still holding the op being
-   * settled (Minor finding: relying on `outbox.get(id)` to learn an op's kind
-   * left a rejected void's target stuck "voiding" forever if that row was ever
-   * missing by settle time). Instead: an id that's a key in myEntries is a
-   * log's own id; otherwise it's checked against every "voiding" myEntries
-   * record's `voidClientEntryId` — the durable side of the correlation.
+   * settled to determine its correlation (Minor finding: relying on
+   * `outbox.get(id)` to learn an op's kind left a rejected void's target stuck
+   * "voiding" forever if that row was ever missing by settle time). Instead:
+   * an id that's a key in myEntries is a log's own id; otherwise it's checked
+   * against every "voiding" myEntries record's `voidClientEntryId` — the
+   * durable side of the correlation.
    *
    * - accepted/duplicate log: outbox entry clears, myEntries moves pending -> synced.
    * - accepted/duplicate void: outbox entry clears, the voided target is removed
@@ -390,7 +420,7 @@ export async function openSyncStore() {
    * - rejected void, any other reason: dropped, and the target reverts
    *   voiding -> synced, since the undo never took effect.
    */
-  async function settleFlush(sessionId: string, outcome: FlushOutcome): Promise<void> {
+  async function settleFlush(sessionId: string, attemptId: string, outcome: FlushOutcome): Promise<void> {
     const tx = db.transaction(["outbox", "myEntries"], "readwrite");
     const outbox = tx.objectStore("outbox");
     const mine = tx.objectStore("myEntries");
@@ -400,7 +430,15 @@ export async function openSyncStore() {
       return candidates.find((e) => e.state === "voiding" && e.voidClientEntryId === voidClientEntryId);
     }
 
+    /** True unless the outbox row exists and belongs to a different, live attempt. */
+    async function ownedByThisAttempt(id: string): Promise<boolean> {
+      const op = await outbox.get(id);
+      if (!op) return true; // already gone; nothing else can own it
+      return op.attemptId === attemptId;
+    }
+
     for (const id of [...outcome.accepted, ...outcome.duplicates]) {
+      if (!(await ownedByThisAttempt(id))) continue;
       await outbox.delete(id);
       const asLog = await mine.get(id);
       if (asLog) {
@@ -416,6 +454,7 @@ export async function openSyncStore() {
     }
 
     for (const rejection of outcome.rejected) {
+      if (!(await ownedByThisAttempt(rejection.clientEntryId))) continue;
       await outbox.delete(rejection.clientEntryId);
       const asLog = await mine.get(rejection.clientEntryId);
       if (asLog) {
