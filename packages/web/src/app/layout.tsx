@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
+import { RegisterServiceWorker } from "./RegisterServiceWorker";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,6 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Mango Tracker",
   description: "Coming soon",
+  manifest: "/manifest.webmanifest",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -28,6 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           wrapping <html> opts the whole app into dynamic rendering. */}
       <body className="min-h-full flex flex-col">
         <ClerkProvider>{children}</ClerkProvider>
+        <RegisterServiceWorker />
       </body>
     </html>
   );
