@@ -49,6 +49,59 @@ const WINDOW = {
 };
 
 describe("createPostgresCycleStore", () => {
+  it("lists only the cycles a user participates in, newest window first", async () => {
+    const cohort = await makeCohort();
+    const mine = await store.createCycle({
+      cohortId: cohort.id, name: "Earlier", ...WINDOW,
+      itemTypeKeys: ["mango"], participantIds: ["u1"], createdBy: "u1",
+    });
+    const alsoMine = await store.createCycle({
+      cohortId: cohort.id, name: "Later",
+      startsAt: new Date("2026-10-01T00:00:00Z"), endsAt: new Date("2026-10-08T00:00:00Z"),
+      itemTypeKeys: ["mango"], participantIds: ["u1"], createdBy: "u1",
+    });
+    await store.createCycle({
+      cohortId: cohort.id, name: "Not mine", ...WINDOW,
+      itemTypeKeys: ["mango"], participantIds: ["u2"], createdBy: "u1",
+    });
+
+    const result = await store.listCyclesForParticipant("u1");
+    expect(result.map((c) => c.id)).toEqual([alsoMine.id, mine.id]);
+    expect(result[0]?.itemTypeKeys).toEqual(["mango"]);
+  });
+
+  it("returns an empty list for someone in no cycles", async () => {
+    await makeCohort();
+    expect(await store.listCyclesForParticipant("nobody")).toEqual([]);
+  });
+
+  it("includes closed cycles — browsing past sessions is a member surface", async () => {
+    const cohort = await makeCohort();
+    const cycle = await store.createCycle({
+      cohortId: cohort.id, name: "Done", ...WINDOW,
+      itemTypeKeys: ["mango"], participantIds: ["u1"], createdBy: "u1",
+    });
+    await store.closeCycle(cycle.id, "u1");
+    const result = await store.listCyclesForParticipant("u1");
+    expect(result.map((c) => c.id)).toEqual([cycle.id]);
+    expect(result[0]?.closedAt).not.toBeNull();
+  });
+
+  it("answers participation without loading the whole cycle", async () => {
+    const cohort = await makeCohort();
+    const cycle = await store.createCycle({
+      cohortId: cohort.id, name: "Beach day", ...WINDOW,
+      itemTypeKeys: ["mango"], participantIds: ["u1"], createdBy: "u1",
+    });
+    expect(await store.isCycleParticipant(cycle.id, "u1")).toBe(true);
+    expect(await store.isCycleParticipant(cycle.id, "u9")).toBe(false);
+  });
+
+  it("reports false for a cycle that does not exist", async () => {
+    expect(await store.isCycleParticipant(
+      "00000000-0000-4000-8000-000000000000", "u1")).toBe(false);
+  });
+
   it("creates a cycle with its participants and item types", async () => {
     const cohort = await makeCohort();
     const cycle = await store.createCycle({

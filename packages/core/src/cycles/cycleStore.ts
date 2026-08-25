@@ -13,6 +13,10 @@ export interface CycleStore {
   updateCycle(cycleId: string, input: UpdateCycleInput): Promise<CycleDetail | undefined>;
   closeCycle(cycleId: string, closedBy: string): Promise<CycleDetail | undefined>;
   reopenCycle(cycleId: string): Promise<CycleDetail | undefined>;
+  /** Every cycle the user takes part in, newest window first. Closed ones included. */
+  listCyclesForParticipant(clerkUserId: string): Promise<CycleDetail[]>;
+  /** A single indexed lookup — this runs on every member API request. */
+  isCycleParticipant(cycleId: string, clerkUserId: string): Promise<boolean>;
 }
 
 interface CycleRow {
@@ -207,6 +211,29 @@ export function createPostgresCycleStore(pool: Pool): CycleStore {
         [cycleId],
       );
       return readDetail(pool, cycleId);
+    },
+
+    async listCyclesForParticipant(clerkUserId) {
+      const result = await pool.query<{ id: string }>(
+        `SELECT c.id
+         FROM cycles c
+         JOIN cycle_participants p ON p.cycle_id = c.id
+         WHERE p.clerk_user_id = $1
+         ORDER BY c.starts_at DESC, c.id`,
+        [clerkUserId],
+      );
+      const details = await Promise.all(result.rows.map((row) => readDetail(pool, row.id)));
+      return details.filter((detail): detail is CycleDetail => detail !== undefined);
+    },
+
+    async isCycleParticipant(cycleId, clerkUserId) {
+      // Deliberately not readDetail(): this runs on every member API request and
+      // must not assemble participant and item-type lists it will never use.
+      const result = await pool.query(
+        "SELECT 1 FROM cycle_participants WHERE cycle_id = $1 AND clerk_user_id = $2",
+        [cycleId, clerkUserId],
+      );
+      return (result.rowCount ?? 0) > 0;
     },
   };
 }

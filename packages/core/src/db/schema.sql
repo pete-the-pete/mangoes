@@ -88,3 +88,13 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
 
 CREATE INDEX IF NOT EXISTS ledger_entries_cycle_seq_idx ON ledger_entries (cycle_id, seq);
 CREATE INDEX IF NOT EXISTS ledger_entries_subject_idx ON ledger_entries (cycle_id, subject_user_id);
+
+CREATE TABLE IF NOT EXISTS user_current_cycle (
+  clerk_user_id TEXT PRIMARY KEY,
+  cycle_id UUID NOT NULL REFERENCES cycles(id) ON DELETE CASCADE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Mirrors cohort_members_user_idx. Both participant-scoped queries added for the
+-- member API filter on this column, and v0.2 shipped without it.
+CREATE INDEX IF NOT EXISTS cycle_participants_user_idx ON cycle_participants (clerk_user_id);
