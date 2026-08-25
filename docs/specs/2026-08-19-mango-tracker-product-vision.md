@@ -47,7 +47,7 @@ Pete is building this as a personal project and wants the foundation (`packages/
 #### Happy Path (Member logging)
 
 1. Member opens the app (or gets a push/notification that a session is live) and sees their **current session** front and center — a big, tappable item (🥭) with a live running total.
-2. Member taps the item, confirms "for me, alone" or "shared with the group" (defaults to individual), confirms the session (defaults to their current-session toggle).
+2. Member taps the item. That is the whole interaction — the log counts for them and toward the group, with no attribution prompt, against their current session. (Corrected by the [member logging spec](2026-08-24-member-logging-design.md): untagged "for the group" logging is an admin action, not a member choice.)
 3. The tap registers instantly on-device (optimistic UI) even with no connectivity, and the log queues for sync.
 4. Member sees their personal count and the group leaderboard update immediately (locally; syncs to others when connectivity allows).
 5. At any point, member can view the live leaderboard/report — running totals, a fun progress visualization, and a per-person breakdown.
@@ -130,7 +130,7 @@ Group stats are a **derived view over the append-only event log**, not pushed st
 
 **Logging**
 - [ ] One-tap logging of an item against the current session (or an explicitly chosen session)
-- [ ] Each log declares individual vs. shared attribution: individual = +1 to that person and the group; shared = +0 to the individual, +1 to the group only (simple model — see Won't Have for the deferred "advanced" attribution mode)
+- [ ] Every log carries an actor (who recorded it) and a subject (who it counts for): a member's own log is +1 to them and +1 to the group; an admin's untagged log is +0 to any individual and +1 to the group. Members never choose between the two — see the [member logging spec](2026-08-24-member-logging-design.md). (Fractional/subgroup credit stays deferred — see Won't Have.)
 - [ ] Session admin can log on behalf of any member, or log untagged "for the group"
 - [ ] Members can edit/delete their own logs while the session is live
 - [ ] Only the session admin can edit logs after the session closes; all such edits are recorded and visible in a detailed audit/report view
