@@ -4,7 +4,11 @@
    stylesheet, and without this its rules beat the classes passed through
    appearance.elements — the sticker border and shadow land on the element and
    then compute to nothing. Paired with `cssLayerName: "clerk"` in
-   clerkAppearance.ts; changing one without the other silently breaks it. */
+   clerkAppearance.ts; changing one without the other silently breaks it.
+
+   Note the production build collapses this to `@layer clerk,components;` —
+   layers a statement omits are ordered by first use, which still puts
+   utilities after clerk. Verified against `next start`, not just dev. */
 @layer theme, base, clerk, components, utilities;
 
 @import "tailwindcss";
