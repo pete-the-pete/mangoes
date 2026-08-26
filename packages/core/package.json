@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
+  "sideEffects": false,
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -b && mkdir -p dist/db && cp src/db/*.sql dist/db/",
