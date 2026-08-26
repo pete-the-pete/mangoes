@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { getCurrentUserRole } from "@/lib/auth";
 import { cycleStore, itemTypeStore } from "@/lib/db";
-import { splitSessionListItems, type SessionListItem } from "@/lib/memberSessions";
+import { splitSessionListItems } from "@/lib/memberSessions";
 import { SessionCard } from "@/components/SessionCard";
+import { SessionGroups } from "@/components/SessionGroups";
+import { PageShell } from "@/components/ui/PageShell";
+import { Label } from "@/components/ui/Label";
 
 // The browsable counterpart to the `/` chooser: same three groupings, but a
 // plain list — choosing here never touches the current-session pointer, it
@@ -25,29 +28,28 @@ export default async function SessionsPage() {
   const { live, scheduled, recent } = splitSessionListItems(cycles, emojiByKey);
   const isEmpty = live.length === 0 && scheduled.length === 0 && recent.length === 0;
 
-  function renderGroup(label: string, items: SessionListItem[]) {
-    if (items.length === 0) return null;
-    return (
-      <section className="flex flex-col gap-2" key={label}>
-        <h2 className="text-xs font-medium tracking-wide text-gray-500 uppercase">{label}</h2>
-        <div className="flex flex-col gap-2">
-          {items.map((item) => (
-            <Link key={item.id} href={`/sessions/${item.id}`}>
-              <SessionCard {...item} />
-            </Link>
-          ))}
-        </div>
-      </section>
-    );
-  }
-
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-6 p-6">
-      <h1 className="text-lg font-semibold">Sessions</h1>
-      {isEmpty && <p className="text-sm text-gray-500">No sessions yet — an admin will add you to one.</p>}
-      {renderGroup("Live", live)}
-      {renderGroup("Scheduled", scheduled)}
-      {renderGroup("Recent", recent)}
-    </div>
+    <PageShell>
+      <h1 className="font-display text-42">Sessions</h1>
+      {isEmpty && (
+        <Label size={11} as="p" className="text-rust">
+          No sessions yet — an admin will add you to one.
+        </Label>
+      )}
+      <SessionGroups
+        live={live}
+        scheduled={scheduled}
+        recent={recent}
+        renderItem={(item) => (
+          <Link
+            key={item.id}
+            href={`/sessions/${item.id}`}
+            className="rounded-20 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink"
+          >
+            <SessionCard {...item} />
+          </Link>
+        )}
+      />
+    </PageShell>
   );
 }

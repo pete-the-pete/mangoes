@@ -34,6 +34,26 @@ project's root directory is `packages/web`, and `next dev` reads env files
 relative to its own directory. A pull into the repo root would be invisible to
 the app.
 
+**`npm run dev` will wipe those pulled keys.** Next's Vercel integration
+refreshes `VERCEL_OIDC_TOKEN` on start by rewriting `packages/web/.env.local`,
+and the rewrite drops everything else in it — so the app boots once and then
+fails with `@clerk/nextjs: Missing publishableKey` on the next start, from a
+file you can see the keys in. Copy them somewhere Vercel does not manage:
+
+```sh
+grep -v '^VERCEL_OIDC_TOKEN=' packages/web/.env.local > packages/web/.env.development.local
+```
+
+Next reads `.env.development.local` ahead of `.env.local` in dev, and Vercel
+never touches it. Both are gitignored.
+
+Two more traps worth knowing when the app won't boot:
+
+- `NEXT_PUBLIC_*` values are inlined at build time, so a `.next/` built before
+  the keys existed keeps serving the empty ones. `rm -rf packages/web/.next`.
+- `npm run dev` must run from `packages/web`. From the repo root, Next resolves
+  its env files against the wrong directory and silently finds none.
+
 `npm run migrate -w core` is idempotent — safe to re-run after every pull.
 
 DDL goes over the unpooled connection on purpose — a transaction pooler can

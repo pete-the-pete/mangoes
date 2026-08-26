@@ -41,3 +41,6 @@ next-env.d.ts
 
 # ...but the checked-in local-dev defaults are not secret
 !.env.dev
+
+# playwright-mcp scratch output (snapshots, console logs)
+.playwright-mcp/

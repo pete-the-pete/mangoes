@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { requireCycleParticipant } from "@/lib/cycleAuth";
 import { cycleStore, itemTypeStore } from "@/lib/db";
 import { EntryList } from "@/components/EntryList";
+import { PageShell } from "@/components/ui/PageShell";
+import { Label } from "@/components/ui/Label";
 
 interface PageProps {
   params: Promise<{ sessionId: string }>;
@@ -40,12 +42,20 @@ export default async function SessionLogsPage({ params }: PageProps) {
   const isParticipant = cycle.participantIds.includes(me);
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-4 p-4">
-      <Link href={`/sessions/${sessionId}`} className="text-xs text-gray-500 hover:underline">
+    <PageShell className="gap-4">
+      <Link
+        href={`/sessions/${sessionId}`}
+        className="font-display text-rust self-start text-15 underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink"
+      >
         ← Back to {cycle.name}
       </Link>
-      <h1 className="text-lg font-semibold">Your logs</h1>
+      <h1 className="font-display text-42">Your logs</h1>
       <EntryList sessionId={sessionId} me={me} itemTypes={itemTypes} readOnly={!isParticipant} />
-    </div>
+      {!isParticipant && (
+        <Label size={11} as="p" className="text-rust">
+          You&rsquo;re not a participant in this session, so there is nothing of yours here.
+        </Label>
+      )}
+    </PageShell>
   );
 }

@@ -8,6 +8,8 @@ import { rejectionMessage } from "@/lib/appendOps";
 import type { MemberSessionJson } from "@/lib/memberSessions";
 import { initialTapToastBookkeeping, pickTapToast, type TapToastBookkeeping } from "@/lib/tapToast";
 import { TapTarget, pickLayout, layoutContainerClass } from "@/components/TapTarget";
+import { Card } from "@/components/ui/Card";
+import { Pill } from "@/components/ui/Pill";
 import { Leaderboard, type LeaderboardItemType, type LeaderboardParticipant } from "@/components/Leaderboard";
 import { SyncBadge } from "@/components/SyncBadge";
 import { UndoToast } from "@/components/UndoToast";
@@ -113,41 +115,81 @@ export function SessionScreen({ session, itemTypes, participants, me, readOnly }
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4 pb-20">
-      <header className="flex items-center justify-between gap-2">
-        <div className="flex flex-col gap-0.5">
-          <h1 className="text-lg font-semibold">{session.name}</h1>
-          <nav className="flex gap-3 text-xs text-gray-500">
-            <Link href="/sessions" className="hover:underline">
-              Switch session
-            </Link>
-            <Link href={`/sessions/${session.id}/logs`} className="hover:underline">
-              Your logs
-            </Link>
-            <Link href={`/groups/${session.groupId}`} className="hover:underline">
-              Group
-            </Link>
-          </nav>
+    <div className="bg-cream relative flex flex-1 flex-col gap-4 overflow-hidden px-4 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+      {/* Screen 1's slow sunburst, anchored below centre. Decorative, behind
+          the reduced-motion gate, and transform-only so it composites. */}
+      <div
+        aria-hidden="true"
+        className="animate-spin-rays pointer-events-none absolute top-[55%] left-1/2 -z-10 aspect-square w-[200vmax] -translate-x-1/2 -translate-y-1/2 opacity-[.07] will-change-transform"
+        style={{
+          background: "repeating-conic-gradient(from 0deg, #10312B 0deg 9deg, transparent 9deg 18deg)",
+        }}
+      />
+
+      <header className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <span className="flex min-w-0 flex-col gap-1.5">
+            {/* The session chip: ink pill, pulsing turquoise dot when live. */}
+            <Pill tone="ink" className="max-w-full">
+              {!closed && (
+                <span aria-hidden="true" className="bg-turquoise animate-pulse-dot size-2.5 shrink-0 rounded-full" />
+              )}
+              <span className="truncate">{session.name}</span>
+              <span className="text-mango-yellow shrink-0">{closed ? "· Closed" : "· Live"}</span>
+            </Pill>
+            <h1 className="sr-only">{session.name}</h1>
+          </span>
+          <SyncBadge pendingCount={state.pending.length} online={state.online} degraded={state.degraded} />
         </div>
-        <SyncBadge pendingCount={state.pending.length} online={state.online} degraded={state.degraded} />
+
+        {/* Screen 1's tab bar, as the three real destinations this screen has. */}
+        <nav className="border-ink bg-cream rounded-99 flex items-stretch overflow-hidden border-4 border-solid">
+          <span className="text-ink font-display bg-mango-yellow flex flex-1 items-center justify-center py-2 text-17">
+            Log
+          </span>
+          <Link
+            href={`/sessions/${session.id}/logs`}
+            className="font-display border-ink flex flex-1 items-center justify-center border-l-4 border-solid py-2 text-17 opacity-55 focus-visible:opacity-100 focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-ink"
+          >
+            Your logs
+          </Link>
+          <Link
+            href={`/groups/${session.groupId}`}
+            className="font-display border-ink flex flex-1 items-center justify-center border-l-4 border-solid py-2 text-17 opacity-55 focus-visible:opacity-100 focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-ink"
+          >
+            Group
+          </Link>
+        </nav>
+        <Link
+          href="/sessions"
+          className="font-display text-rust self-start text-15 underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        >
+          Switch session
+        </Link>
       </header>
 
       {readOnly && (
-        <p className="rounded bg-gray-100 p-2 text-sm text-gray-600">
-          You&rsquo;re viewing this session without being a participant, so logging is turned off here.
-        </p>
+        <Card tone="turquoise" border={4} radius={16} lift="xs" className="px-3 py-2.5">
+          <p className="text-12 text-ink leading-snug">
+            You&rsquo;re viewing this session without being a participant, so logging is turned off here.
+          </p>
+        </Card>
       )}
 
       {session.isOverdue && !closed && (
-        <p className="rounded bg-amber-50 p-2 text-sm text-amber-800">
-          This session&rsquo;s end time has passed — an admin can close it.
-        </p>
+        <Card tone="yellow" border={4} radius={16} lift="xs" className="px-3 py-2.5">
+          <p className="text-12 text-ink leading-snug">
+            This session&rsquo;s end time has passed — an admin can close it.
+          </p>
+        </Card>
       )}
 
       {closed && (
-        <p className="rounded bg-gray-100 p-2 text-sm text-gray-600">
-          This session is closed — {rejectionMessage("cycle_closed")}.
-        </p>
+        <Card tone="pink" border={4} radius={16} lift="xs" className="px-3 py-2.5">
+          <p className="text-12 text-cream leading-snug">
+            This session is closed — {rejectionMessage("cycle_closed")}.
+          </p>
+        </Card>
       )}
 
       <div className={layoutContainerClass(itemTypes.length)}>

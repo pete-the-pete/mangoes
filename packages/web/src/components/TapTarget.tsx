@@ -1,3 +1,6 @@
+import { cn } from "./ui/cn";
+import { Label } from "./ui/Label";
+
 export type TapTargetSize = "large" | "grid" | "compact";
 
 export interface TapTargetProps {
@@ -10,18 +13,6 @@ export interface TapTargetProps {
   disabled: boolean;
   onTap: () => void;
 }
-
-const SIZE_CLASSES: Record<TapTargetSize, string> = {
-  large: "flex-1 flex-col gap-3 p-10 text-7xl min-h-[50vh]",
-  grid: "aspect-square flex-col gap-2 p-4 text-5xl",
-  compact: "aspect-square flex-col gap-1 p-2 text-3xl",
-};
-
-const LABEL_CLASSES: Record<TapTargetSize, string> = {
-  large: "text-lg font-medium text-gray-700",
-  grid: "text-sm font-medium text-gray-700",
-  compact: "text-xs font-medium text-gray-700",
-};
 
 /**
  * How many `TapTarget`s a session's item types need decides the layout, per
@@ -39,9 +30,44 @@ export function pickLayout(itemTypeCount: number): TapTargetSize {
 export function layoutContainerClass(itemTypeCount: number): string {
   const layout = pickLayout(itemTypeCount);
   if (layout === "large") return "flex flex-1 flex-col";
-  if (layout === "grid") return "grid grid-cols-2 gap-3";
-  return "grid grid-cols-3 gap-2 overflow-y-auto";
+  if (layout === "grid") return "grid grid-cols-2 gap-4";
+  return "grid grid-cols-3 gap-3 overflow-y-auto";
 }
+
+/**
+ * The handoff only ever draws the hero: a 268px circle with a ray ring, an
+ * inner disc and a big bobbing mango. The grid sizes are ours — a session can
+ * track several item types — so they reuse the same vocabulary (ink outline,
+ * yellow fill, sticker underside, press-down) at a scale where a ray ring and
+ * an inner disc would just be noise.
+ */
+const RING: Record<TapTargetSize, string> = {
+  large: "size-[min(68vw,268px)] border-8",
+  grid: "aspect-square w-full border-6",
+  compact: "aspect-square w-full border-5",
+};
+
+const GLYPH: Record<TapTargetSize, string> = {
+  large: "text-[min(30vw,118px)]",
+  grid: "text-[clamp(2.5rem,14vw,4rem)]",
+  compact: "text-[clamp(1.75rem,9vw,2.5rem)]",
+};
+
+/**
+ * Press distances are matched to each size's resting shadow so the button
+ * lands flush on its own underside rather than hovering above it.
+ */
+const PRESS: Record<TapTargetSize, string> = {
+  large: "active:translate-y-[9px] active:shadow-tap-target-pressed",
+  grid: "active:translate-y-[4px] active:shadow-sticker-xs",
+  compact: "active:translate-y-[3px] active:shadow-sticker-xs",
+};
+
+const REST: Record<TapTargetSize, string> = {
+  large: "shadow-tap-target",
+  grid: "shadow-sticker-md shadow-ink",
+  compact: "shadow-sticker-sm shadow-ink",
+};
 
 /**
  * One tap logs +1. No confirmation, no attribution prompt, no long-press —
@@ -50,24 +76,92 @@ export function layoutContainerClass(itemTypeCount: number): string {
  * hook's `log()`, which writes to IndexedDB and re-renders before any
  * network call — the count moving is this component reacting to fresh
  * `mine`/`group` props, not anything it manages itself.
+ *
+ * The press is pure CSS `:active`. This is the tap path of the core loop,
+ * where routing feedback through React state would put a render between the
+ * finger and the response.
  */
 export function TapTarget({ emoji, label, mine, group, size, disabled, onTap }: TapTargetProps) {
+  const isHero = size === "large";
+
   return (
     <button
       type="button"
       onClick={onTap}
       disabled={disabled}
-      className={`flex items-center justify-center rounded-lg border border-gray-200 bg-white shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${SIZE_CLASSES[size]}`}
+      aria-label={`Log one ${label}`}
+      className={cn(
+        // gap-6 on the hero, not gap-3: its underside shadow reaches 22px below
+        // the circle (14px offset + 8px spread), and anything closer collides
+        // with it.
+        "group flex cursor-pointer flex-col items-center justify-center bg-transparent",
+        isHero ? "gap-6" : "gap-3",
+        "transition-[transform,box-shadow] duration-75 ease-out",
+        "disabled:cursor-not-allowed disabled:opacity-50 disabled:active:translate-y-0",
+        "focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-ink rounded-full",
+        isHero && "flex-1 justify-center py-3",
+      )}
     >
-      <span aria-hidden="true">{emoji}</span>
-      <span className={LABEL_CLASSES[size]}>{label}</span>
-      <span className="flex items-baseline gap-1.5 text-sm text-gray-500">
-        <span className="font-semibold text-gray-900">{mine}</span>
-        <span className="text-xs">mine</span>
-        <span aria-hidden="true">·</span>
-        <span className="font-semibold text-gray-900">{group}</span>
-        <span className="text-xs">total</span>
+      {isHero && (
+        <span className="flex items-baseline gap-2.5">
+          <span className="font-display text-ink text-[min(28vw,110px)] leading-[.78] tabular-nums [text-shadow:5px_5px_0_#FFD400]">
+            {mine}
+          </span>
+          <span className="font-display text-ink text-20 leading-none">
+            {label}
+            <br />
+            logged
+          </span>
+        </span>
+      )}
+
+      {/* The tap target proper. */}
+      <span
+        className={cn(
+          "border-ink bg-mango-yellow relative grid place-items-center rounded-full border-solid",
+          "transition-[transform,box-shadow] duration-75 ease-out",
+          RING[size],
+          REST[size],
+          PRESS[size],
+          "group-disabled:shadow-none",
+        )}
+      >
+        {isHero && (
+          <>
+            {/* Counter-rotating ray ring, then the cream inner disc over it. */}
+            <span
+              aria-hidden="true"
+              className="animate-spin-back absolute inset-2 rounded-full opacity-30 will-change-transform"
+              style={{
+                background:
+                  "repeating-conic-gradient(from 0deg, #10312B 0deg 7.5deg, transparent 7.5deg 15deg)",
+              }}
+            />
+            <span
+              aria-hidden="true"
+              className="border-ink bg-cream absolute inset-[38px] rounded-full border-5 border-solid"
+            />
+          </>
+        )}
+        <span aria-hidden="true" className={cn("relative leading-none", GLYPH[size], isHero && "animate-bob")}>
+          {emoji}
+        </span>
       </span>
+
+      {!isHero && (
+        <span className="flex flex-col items-center gap-0.5">
+          <span className="font-display text-ink text-17 leading-none">{label}</span>
+          <span className="font-display text-ink text-15 leading-none tabular-nums">
+            {mine} <span className="text-rust">/ {group}</span>
+          </span>
+        </span>
+      )}
+
+      {isHero && (
+        <Label size={11} className="text-rust">
+          {group} for the group
+        </Label>
+      )}
     </button>
   );
 }

@@ -3,8 +3,14 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentUserRole } from "@/lib/auth";
 import { cohortStore, cycleStore, itemTypeStore } from "@/lib/db";
 import { listGroupRosterForMember } from "@/lib/memberGroups";
-import { splitSessionListItems, type SessionListItem } from "@/lib/memberSessions";
+import { splitSessionListItems } from "@/lib/memberSessions";
 import { SessionCard } from "@/components/SessionCard";
+import { SessionGroups } from "@/components/SessionGroups";
+import { PageShell } from "@/components/ui/PageShell";
+import { Avatar } from "@/components/ui/Avatar";
+import { Card } from "@/components/ui/Card";
+import { Label } from "@/components/ui/Label";
+import { Pill } from "@/components/ui/Pill";
 
 interface PageProps {
   params: Promise<{ groupId: string }>;
@@ -45,47 +51,51 @@ export default async function GroupPage({ params }: PageProps) {
   const emojiByKey = new Map(catalog.map((t) => [t.key, t.emoji]));
   const { live, scheduled, recent } = splitSessionListItems(cycles, emojiByKey);
 
-  function renderGroup(label: string, items: SessionListItem[]) {
-    if (items.length === 0) return null;
-    return (
-      <section className="flex flex-col gap-2" key={label}>
-        <h2 className="text-xs font-medium tracking-wide text-gray-500 uppercase">{label}</h2>
-        <div className="flex flex-col gap-2">
-          {items.map((item) => (
-            <Link key={item.id} href={`/sessions/${item.id}`}>
-              <SessionCard {...item} />
-            </Link>
-          ))}
-        </div>
-      </section>
-    );
-  }
-
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-8 p-6">
-      <h1 className="text-lg font-semibold">{group.name}</h1>
+    <PageShell className="gap-8">
+      <h1 className="font-display text-42">{group.name}</h1>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs font-medium tracking-wide text-gray-500 uppercase">Members</h2>
-        <ul className="flex flex-col gap-1">
+      <section className="flex flex-col gap-2.5">
+        <Label size={12} as="h2" className="text-rust">
+          Members
+        </Label>
+        <ul className="flex flex-col gap-2">
           {members.map((m) => (
-            <li key={m.clerkUserId} className="flex items-center justify-between gap-2 border-b border-gray-100 py-1.5 text-sm">
-              <span className="flex items-center gap-2">
-                {m.avatarUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element -- small avatar, not worth next/image's setup here
-                  <img src={m.avatarUrl} alt="" className="h-6 w-6 rounded-full" />
-                )}
-                <span>{m.displayName}</span>
-              </span>
-              <span className="text-xs text-gray-500">{m.role}</span>
+            <li key={m.clerkUserId}>
+              <Card
+                tone="cream"
+                border={4}
+                radius={18}
+                lift="xs"
+                className="flex items-center justify-between gap-3 p-2.5"
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <Avatar src={m.avatarUrl || null} name={m.displayName} size={34} />
+                  <span className="font-display text-19 min-w-0 truncate">{m.displayName}</span>
+                </span>
+                <Pill tone={m.role === "admin" ? "turquoise" : "cream"} className="shrink-0">
+                  {m.role}
+                </Pill>
+              </Card>
             </li>
           ))}
         </ul>
       </section>
 
-      {renderGroup("Live", live)}
-      {renderGroup("Scheduled", scheduled)}
-      {renderGroup("Recent", recent)}
-    </div>
+      <SessionGroups
+        live={live}
+        scheduled={scheduled}
+        recent={recent}
+        renderItem={(item) => (
+          <Link
+            key={item.id}
+            href={`/sessions/${item.id}`}
+            className="rounded-20 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink"
+          >
+            <SessionCard {...item} />
+          </Link>
+        )}
+      />
+    </PageShell>
   );
 }

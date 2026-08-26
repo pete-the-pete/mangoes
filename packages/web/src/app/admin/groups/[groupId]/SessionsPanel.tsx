@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { ButtonLink } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Label } from "@/components/ui/Label";
+import { Pill } from "@/components/ui/Pill";
 import type { CycleStatus } from "core";
 
 export interface SessionView {
@@ -28,63 +32,60 @@ export function SessionsPanel({
 }) {
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Sessions</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-display text-30">Sessions</h2>
         {canManage && (
-          <Link
-            href={`/admin/groups/${groupId}/sessions/new`}
-            className="rounded bg-black px-3 py-1.5 text-sm text-white"
-          >
+          <ButtonLink href={`/admin/groups/${groupId}/sessions/new`} tone="go" size="sm">
             New session
-          </Link>
+          </ButtonLink>
         )}
       </div>
 
       {sessions.length === 0 ? (
-        <p className="text-sm text-gray-500">
-          No sessions yet. A session is a time-boxed window that counts a chosen set of items.
-        </p>
+        <Card tone="cream" border={4} radius={18} lift="xs" className="flex flex-col gap-1 p-4">
+          <span className="font-display text-20">No sessions yet</span>
+          <Label size={10} as="p" className="text-rust">
+            A session is a time-boxed window that counts a chosen set of items.
+          </Label>
+        </Card>
       ) : (
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-gray-500">
-              <th className="py-2 font-medium">Name</th>
-              <th className="font-medium">Window</th>
-              <th className="font-medium">Status</th>
-              <th className="font-medium">People</th>
-              <th className="font-medium">Items</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sessions.map((session) => (
-              <tr key={session.id} className="border-b">
-                <td className="py-2">
-                  <Link
-                    href={`/admin/groups/${groupId}/sessions/${session.id}`}
-                    className="hover:underline"
-                  >
-                    {session.name}
-                  </Link>
-                </td>
-                <td className="text-gray-500">{session.window}</td>
-                <td>
-                  <span className="rounded-full border px-2 py-0.5 text-xs">
-                    {STATUS_LABELS[session.status]}
+        <ul className="flex flex-col gap-2.5">
+          {sessions.map((session) => (
+            <li key={session.id}>
+              <Link
+                href={`/admin/groups/${groupId}/sessions/${session.id}`}
+                className="rounded-18 block focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink"
+              >
+                <Card
+                  tone="cream"
+                  border={4}
+                  radius={18}
+                  lift="xs"
+                  className="flex flex-wrap items-center justify-between gap-3 p-3"
+                >
+                  <span className="flex min-w-0 flex-col gap-1">
+                    <span className="font-display text-20 min-w-0 truncate">{session.name}</span>
+                    <Label size={9} className="text-rust">
+                      {session.window} · {session.participantCount}{" "}
+                      {session.participantCount === 1 ? "person" : "people"}
+                    </Label>
                   </span>
-                  {/* Past its end time and still open — closing is explicit, so
-                      this prompts rather than changing the state itself. */}
-                  {session.isOverdue && (
-                    <span className="ml-2 text-xs text-amber-700">ended — needs closing</span>
-                  )}
-                </td>
-                <td>{session.participantCount}</td>
-                <td aria-label={`${session.itemEmoji.length} item types`}>
-                  {session.itemEmoji.join(" ")}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span aria-label={`${session.itemEmoji.length} item types`} className="text-16">
+                      {session.itemEmoji.join(" ")}
+                    </span>
+                    <Pill tone={session.status === "live" ? "turquoise" : "cream"}>
+                      {STATUS_LABELS[session.status]}
+                    </Pill>
+                    {/* Past its end time and still open — closing is explicit, so
+                        this prompts rather than changing the state itself. */}
+                    {session.isOverdue && <Pill tone="pink">Needs closing</Pill>}
+                  </span>
+                </Card>
+              </Link>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SessionCard } from "@/components/SessionCard";
+import { PageShell } from "@/components/ui/PageShell";
+import { Label } from "@/components/ui/Label";
+import { SessionGroups } from "@/components/SessionGroups";
 import type { SessionListItem } from "@/lib/memberSessions";
 
 export interface SessionChooserProps {
@@ -48,45 +51,42 @@ export function SessionChooser({ live, scheduled, recent }: SessionChooserProps)
 
   if (isEmpty) {
     return (
-      <div className="flex flex-1 items-center justify-center p-6 text-center">
-        <p className="text-sm text-gray-500">No sessions yet — an admin will add you to one.</p>
-      </div>
-    );
-  }
-
-  function renderGroup(label: string, items: SessionListItem[]) {
-    if (items.length === 0) return null;
-    return (
-      <section className="flex flex-col gap-2" key={label}>
-        <h2 className="text-xs font-medium tracking-wide text-gray-500 uppercase">{label}</h2>
-        <div className="flex flex-col gap-2">
-          {items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => choose(item.id)}
-              disabled={choosingId !== null}
-              className="text-left disabled:opacity-50"
-            >
-              <SessionCard {...item} />
-            </button>
-          ))}
-        </div>
-      </section>
+      <PageShell className="items-center justify-center text-center">
+        <span aria-hidden="true" className="animate-bob text-[5rem] leading-none">
+          🥭
+        </span>
+        <h1 className="font-display text-30">Nothing to log yet</h1>
+        <Label size={11} as="p" className="text-rust">
+          An admin will add you to a session.
+        </Label>
+      </PageShell>
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 p-6">
-      <h1 className="text-lg font-semibold">Choose a session</h1>
+    <PageShell>
+      <h1 className="font-display text-42">Choose a session</h1>
       {error && (
-        <p role="alert" className="text-sm text-red-600">
+        <Label size={11} as="p" role="alert" className="text-hot-pink">
           {error}
-        </p>
+        </Label>
       )}
-      {renderGroup("Live", live)}
-      {renderGroup("Scheduled", scheduled)}
-      {renderGroup("Recent", recent)}
-    </div>
+      <SessionGroups
+        live={live}
+        scheduled={scheduled}
+        recent={recent}
+        renderItem={(item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => choose(item.id)}
+            disabled={choosingId !== null}
+            className="w-full cursor-pointer text-left disabled:cursor-not-allowed disabled:opacity-50 rounded-20 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink"
+          >
+            <SessionCard {...item} />
+          </button>
+        )}
+      />
+    </PageShell>
   );
 }

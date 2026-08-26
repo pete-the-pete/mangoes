@@ -5,7 +5,15 @@
 // offline shell lives at the static, auth-free /offline route instead. Cache
 // name bumped so `activate` evicts the old v1 entry for "/" rather than
 // leaving it to rot as an unreachable, never-updated cache key.
-const CACHE = "mango-shell-v2";
+//
+// v4: the precached icon-192 was redrawn in the design pass too — same
+// reasoning as v3, and the same reason this bump is not optional.
+// v3: the design pass rebuilt /offline's Splash component. The precached copy
+// is a rendered snapshot, so without a new cache name every already-installed
+// user would keep the pre-redesign splash forever — `activate` only evicts
+// caches whose key differs from this one. Bump this on any change to a
+// precached route's markup or styling, not just to this file's logic.
+const CACHE = "mango-shell-v4";
 const SHELL = ["/offline", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {

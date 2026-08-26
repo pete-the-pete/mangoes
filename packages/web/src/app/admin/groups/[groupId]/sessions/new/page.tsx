@@ -4,6 +4,8 @@ import { cohortStore, itemTypeStore } from "@/lib/db";
 import { listGroupMembersForAdmin } from "@/lib/adminGroups";
 import { DEFAULT_ITEM_TYPE_KEY } from "@/lib/itemTypeCatalog";
 import { SessionForm } from "../SessionForm";
+import { PageShell } from "@/components/ui/PageShell";
+import { Label } from "@/components/ui/Label";
 
 export default async function NewSessionPage({
   params,
@@ -28,8 +30,13 @@ export default async function NewSessionPage({
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-3xl p-6">
-      <h1 className="mb-4 text-xl font-semibold">New session</h1>
+    <PageShell width="wide">
+      <header className="flex flex-col gap-1.5">
+        <Label size={10} className="text-rust">
+          Group admin
+        </Label>
+        <h1 className="font-display text-52">New session</h1>
+      </header>
       <SessionForm
         groupId={groupId}
         canManage
@@ -40,6 +47,6 @@ export default async function NewSessionPage({
           name: m.name ?? m.email ?? m.clerkUserId,
         }))}
       />
-    </div>
+    </PageShell>
   );
 }

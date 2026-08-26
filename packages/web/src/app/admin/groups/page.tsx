@@ -1,6 +1,7 @@
 import { getCurrentUserRole } from "@/lib/auth";
 import { cohortStore } from "@/lib/db";
 import { GroupsTable, type GroupView } from "./GroupsTable";
+import { PageShell } from "@/components/ui/PageShell";
 
 const CREATED_FMT = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
@@ -32,9 +33,9 @@ export default async function GroupsPage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-3xl p-6">
-      <h1 className="mb-4 text-xl font-semibold">Groups</h1>
+    <PageShell width="wide">
+      <h1 className="font-display text-48">Groups</h1>
       <GroupsTable initialGroups={rows} />
-    </div>
+    </PageShell>
   );
 }

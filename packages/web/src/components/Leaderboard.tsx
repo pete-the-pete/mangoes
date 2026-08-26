@@ -1,4 +1,9 @@
 import { groupTotal, subjectTotal, type Aggregate } from "core";
+import { Avatar } from "./ui/Avatar";
+import { Card } from "./ui/Card";
+import { Label } from "./ui/Label";
+import { Pill } from "./ui/Pill";
+import { cn } from "./ui/cn";
 
 export interface LeaderboardItemType {
   key: string;
@@ -25,6 +30,12 @@ export interface LeaderboardProps {
  * leaderboard IS a roster, so there is no separate member-facing member
  * list anywhere. Reads `groupTotal`/`subjectTotal` from core rather than
  * summing counts by hand, per the milestone's constraint.
+ *
+ * The handoff draws screen 2 as a ranked list of single counts with a bar per
+ * person. That shape assumes one item type; a session can track several, and
+ * "rank" is undefined across them. So this keeps the matrix and borrows the
+ * row treatment: outlined cards, Anton counts, the current user's row raised
+ * off the page.
  */
 export function Leaderboard({ itemTypes, participants, aggregate, me }: LeaderboardProps) {
   if (itemTypes.length === 0 || participants.length === 0) {
@@ -32,53 +43,83 @@ export function Leaderboard({ itemTypes, participants, aggregate, me }: Leaderbo
   }
 
   return (
-    <div className="overflow-x-auto rounded border border-gray-200">
-      <table className="w-full min-w-max border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-gray-200 bg-gray-50">
-            <th className="p-2 text-left font-medium text-gray-500">Who</th>
-            {itemTypes.map((t) => (
-              <th key={t.key} className="p-2 text-center font-medium text-gray-500" title={t.label}>
-                <span aria-hidden="true">{t.emoji}</span>
-                <span className="sr-only">{t.label}</span>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {participants.map((p) => (
-            <tr key={p.clerkUserId} className={`border-b border-gray-100 ${p.clerkUserId === me ? "bg-gray-50 font-medium" : ""}`}>
-              <td className="flex items-center gap-2 p-2">
-                {p.imageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element -- small avatar, not worth next/image's setup here
-                  <img src={p.imageUrl} alt="" className="h-6 w-6 rounded-full" />
-                )}
-                <span>{p.clerkUserId === me ? `${p.name} (you)` : p.name}</span>
-              </td>
+    <section className="flex flex-col gap-2.5">
+      <Label size={12} className="text-rust">
+        The leaderboard
+      </Label>
+
+      {participants.map((p) => {
+        const isMe = p.clerkUserId === me;
+        return (
+          <Card
+            key={p.clerkUserId}
+            tone="cream"
+            border={4}
+            radius={18}
+            lift={isMe ? "lg" : "xs"}
+            className={cn(
+              "flex items-center justify-between gap-3 p-2.5",
+              // The handoff gives the current user's row full opacity and a
+              // deeper shadow while everyone else's sits back.
+              !isMe && "opacity-85",
+            )}
+          >
+            <span className="flex min-w-0 items-center gap-2.5">
+              <Avatar src={p.imageUrl || null} name={p.name} size={36} />
+              {/* The name goes through Anton, which uppercases. The "you"
+                  marker is a separate badge rather than part of that string —
+                  folded in, it would read as DAVE (YOU). */}
+              <span className="font-display text-19 min-w-0 truncate">{p.name}</span>
+              {isMe && (
+                <Pill tone="turquoise" className="shrink-0">
+                  You
+                </Pill>
+              )}
+            </span>
+            <span className="flex shrink-0 items-center gap-3">
               {itemTypes.map((t) => (
-                <td key={t.key} className="p-2 text-center tabular-nums">
-                  {subjectTotal(aggregate, p.clerkUserId, t.key)}
-                </td>
+                <span key={t.key} className="flex items-center gap-1" title={t.label}>
+                  <span aria-hidden="true" className="text-14">
+                    {t.emoji}
+                  </span>
+                  <span className="font-display text-24 leading-none tabular-nums">
+                    {subjectTotal(aggregate, p.clerkUserId, t.key)}
+                  </span>
+                  <span className="sr-only">{t.label}</span>
+                </span>
               ))}
-            </tr>
-          ))}
-          <tr className="font-semibold">
-            <td className="p-2">Total</td>
-            {itemTypes.map((t) => (
-              <td key={t.key} className="p-2 text-center tabular-nums">
+            </span>
+          </Card>
+        );
+      })}
+
+      <Card tone="ink" border={4} radius={18} lift="xs" className="flex items-center justify-between gap-3 p-3">
+        <Label size={11} className="text-mango-yellow">
+          Group total
+        </Label>
+        <span className="flex shrink-0 items-center gap-3">
+          {itemTypes.map((t) => (
+            <span key={t.key} className="flex items-center gap-1" title={t.label}>
+              <span aria-hidden="true" className="text-14">
+                {t.emoji}
+              </span>
+              <span className="font-display text-mango-yellow text-26 leading-none tabular-nums">
                 {groupTotal(aggregate, t.key)}
-              </td>
-            ))}
-          </tr>
-        </tbody>
-      </table>
+              </span>
+              <span className="sr-only">{t.label}</span>
+            </span>
+          ))}
+        </span>
+      </Card>
+
       {/* groupTotal folds in entries logged for the group as a whole (an
           admin-only action with no member-facing surface), so Total can run
           higher than the rows above it add up to — spelled out here so that
-          reads as expected, not as a bug. */}
-      <p className="border-t border-gray-100 p-2 text-xs text-gray-500">
-        Total also counts entries logged for the group, not credited to any one person.
+          reads as expected, not as a bug. Body copy, not a Label: it is prose
+          meant to be read, and Label is uppercase and tracked. */}
+      <p className="text-12 text-rust leading-snug">
+        Group total also counts entries logged for the group, not credited to any one person.
       </p>
-    </div>
+    </section>
   );
 }
