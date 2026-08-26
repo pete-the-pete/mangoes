@@ -27,6 +27,42 @@
   --color-turquoise-deep: #00c2b0; /* screen 2 & 7 backgrounds */
   --color-rust: #b8380b; /* small-caps labels on light, button underside */
 
+  /* Type scale, in px, exactly as the handoff lists it. Anton carries the
+     display sizes and Space Grotesk the label sizes (9-15); the two overlap
+     in the middle, so one numeric scale serves both. 9-10px is only ever
+     used for uppercase tracked labels, never for reading copy. */
+  --text-9: 9px;
+  --text-10: 10px;
+  --text-11: 11px;
+  --text-12: 12px;
+  --text-13: 13px;
+  --text-14: 14px;
+  --text-15: 15px;
+  --text-16: 16px;
+  --text-17: 17px;
+  --text-18: 18px;
+  --text-19: 19px;
+  --text-20: 20px;
+  --text-21: 21px;
+  --text-22: 22px;
+  --text-23: 23px;
+  --text-24: 24px;
+  --text-26: 26px;
+  --text-28: 28px;
+  --text-29: 29px;
+  --text-30: 30px;
+  --text-34: 34px;
+  --text-42: 42px;
+  --text-44: 44px;
+  --text-46: 46px;
+  --text-48: 48px;
+  --text-50: 50px;
+  --text-52: 52px;
+  --text-56: 56px;
+  --text-62: 62px;
+  --text-104: 104px;
+  --text-150: 150px;
+
   /* Borders. Always solid ink. 3px small badges/avatars, 4px dense rows,
      5px cards/pills, 6px primary CTAs, 7-8px hero circle/phone shell. */
   --border-width-3: 3px;
@@ -273,7 +309,12 @@
 }
 
 /* The off-state convention: an inactive pill/row looks *pressed down*.
-   Used by attribution pills, item-type chips and crew toggles alike. */
+   Used by item-type chips, crew toggles and inactive tabs alike.
+
+   The handoff gives these as ranges (opacity .55-.6, translateY 5-6px) that
+   vary slightly per element. Frozen to one value here on purpose — the
+   variation reads as inconsistency at app scale, not as intent. Don't
+   "correct" it back to a range. */
 @utility sticker-off {
   opacity: 0.55;
   box-shadow: none;
