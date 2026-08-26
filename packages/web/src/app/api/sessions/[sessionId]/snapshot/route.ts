@@ -3,6 +3,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { requireCycleParticipant } from "@/lib/cycleAuth";
 import { cycleStore, ledgerStore, itemTypeStore } from "@/lib/db";
 import { toMemberSessionJson } from "@/lib/memberSessions";
+import { deriveMemberDisplayName } from "@/lib/memberDisplayName";
 
 interface RouteContext {
   params: Promise<{ sessionId: string }>;
@@ -52,7 +53,7 @@ export async function GET(_request: Request, context: RouteContext) {
     .filter((u): u is NonNullable<typeof u> => u !== undefined)
     .map((u) => ({
       clerkUserId: u.id,
-      name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.primaryEmailAddress?.emailAddress || u.id,
+      name: deriveMemberDisplayName(u.firstName, u.lastName),
       imageUrl: u.imageUrl,
     }));
 

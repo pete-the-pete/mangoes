@@ -1,5 +1,6 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import type { CycleDetail } from "core";
+import { deriveMemberDisplayName } from "./memberDisplayName";
 
 export interface CycleParticipantView {
   clerkUserId: string;
@@ -31,7 +32,7 @@ export async function listCycleParticipants(cycle: CycleDetail): Promise<CyclePa
     .filter((u): u is NonNullable<typeof u> => u !== undefined)
     .map((u) => ({
       clerkUserId: u.id,
-      name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.primaryEmailAddress?.emailAddress || u.id,
+      name: deriveMemberDisplayName(u.firstName, u.lastName),
       imageUrl: u.imageUrl,
     }));
 }
