@@ -7,6 +7,7 @@ import { listGroupMembersForAdmin } from "@/lib/adminGroups";
 import { DEFAULT_ITEM_TYPE_KEY } from "@/lib/itemTypeCatalog";
 import { SessionForm } from "../SessionForm";
 import { AdminLogControl, type AdminEntryView } from "./AdminLogControl";
+import { ButtonLink } from "@/components/ui/Button";
 import { PageShell } from "@/components/ui/PageShell";
 
 /** How many recent ledger entries the session page pulls for the admin log control. */
@@ -107,12 +108,21 @@ export default async function SessionPage({
 
   return (
     <PageShell width="wide">
-      <Link
-        href={`/admin/groups/${groupId}`}
-        className="font-display text-rust self-start text-15 underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink"
-      >
-        ← Back to the group
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link
+          href={`/admin/groups/${groupId}`}
+          className="font-display text-rust text-15 underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        >
+          ← Back to the group
+        </Link>
+        {/* The other half of the member screen's Admin tab. Managing a session
+            and taking part in one are the same person's two jobs, and this
+            page used to be the only one a group admin could reach — settings
+            and log-for-anyone, never the screen the rest of the group sees. */}
+        <ButtonLink href={`/sessions/${sessionId}`} tone="secondary" size="sm">
+          Participant view
+        </ButtonLink>
+      </div>
       <h1 className="font-display text-48">{cycle.name}</h1>
       <SessionForm
         groupId={groupId}
