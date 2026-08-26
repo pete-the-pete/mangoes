@@ -1,26 +1,315 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ---------------------------------------------------------------------------
+ * Design tokens — ported verbatim from docs/design/handoff.md.
+ *
+ * Token NAMES are the handoff's own, deliberately: a future revision of the
+ * design bundle should read as a diff here, not a renaming exercise. When the
+ * prose and `docs/design/Mango Tracker.dc.html` disagree, the HTML wins.
+ *
+ * There is no dark mode. The palette is a fixed cream/ink one — the handoff
+ * defines no dark variant, and the create-next-app `prefers-color-scheme`
+ * block that used to live here fought it (it painted #0a0a0a under everything
+ * for dark-mode users).
+ * ------------------------------------------------------------------------- */
+@theme {
+  /* Color. Rules from the handoff: at most two background colors per screen;
+     every element is outlined in `ink` — no borderless cards; never introduce
+     a new hue, shift the lightness of an existing one instead. */
+  --color-ink: #10312b; /* every outline, all body text, dark surfaces */
+  --color-ink-deep: #0a2019; /* super-admin surface, inset track fills */
+  --color-cream: #fff1d6; /* page/card background, text on dark */
+  --color-mango-yellow: #ffd400; /* primary accent, tap target, active pills */
+  --color-mango-orange: #ff7a18; /* secondary surface, GO LIVE */
+  --color-mango-orange-alt: #ff8a1e; /* stripe pattern variant only */
+  --color-hot-pink: #ff2d6f; /* alert/urgency, destructive-ish actions */
+  --color-turquoise: #00e0cc; /* "shared/group" semantics, admin toggles */
+  --color-turquoise-deep: #00c2b0; /* screen 2 & 7 backgrounds */
+  --color-rust: #b8380b; /* small-caps labels on light, button underside */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Borders. Always solid ink. 3px small badges/avatars, 4px dense rows,
+     5px cards/pills, 6px primary CTAs, 7-8px hero circle/phone shell. */
+  --border-width-3: 3px;
+  --border-width-4: 4px;
+  --border-width-5: 5px;
+  --border-width-6: 6px;
+  --border-width-7: 7px;
+  --border-width-8: 8px;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  /* Radius. 8 banner, 16-22 cards, 26 large panel, 99 pills/CTAs.
+     (50% avatars and 52px phone shell use rounded-full / arbitrary values.) */
+  --radius-8: 8px;
+  --radius-16: 16px;
+  --radius-18: 18px;
+  --radius-20: 20px;
+  --radius-22: 22px;
+  --radius-26: 26px;
+  --radius-99: 99px;
+
+  /* Sticker shadow — the signature. Hard offset, ZERO blur, ink.
+     Tailwind compiles these with a `--tw-shadow-color` hook, so the inverted
+     cream shadow the handoff uses on dark surfaces (screens 5 and 8) is
+     `shadow-sticker-md shadow-cream`, not a second set of tokens. */
+  --shadow-sticker-xs: 0 4px 0 #10312b;
+  --shadow-sticker-sm: 0 5px 0 #10312b;
+  --shadow-sticker-md: 0 6px 0 #10312b;
+  --shadow-sticker-lg: 0 7px 0 #10312b;
+  --shadow-sticker-xl: 0 9px 0 #10312b;
+  --shadow-sticker-2xl: 0 10px 0 #10312b;
+  /* Pressed: what a sticker button collapses to on :active. */
+  --shadow-sticker-pressed: 0 5px 0 #10312b;
+  /* Diagonal — badges and headers sitting on the canvas. */
+  --shadow-sticker-diag-sm: 5px 5px 0 #10312b;
+  --shadow-sticker-diag-md: 6px 6px 0 #10312b;
+  --shadow-sticker-diag-lg: 8px 8px 0 #10312b;
+  --shadow-sticker-diag-xl: 9px 9px 0 #10312b;
+
+  /* Motion. Decorative infinite loops are disabled under prefers-reduced-motion
+     at the bottom of this file. */
+  --animate-spin-rays: spin-rays 44s linear infinite;
+  --animate-spin-rays-slow: spin-rays 60s linear infinite;
+  --animate-spin-rays-slowest: spin-rays 70s linear infinite;
+  --animate-spin-back: spin-back 18s linear infinite;
+  --animate-pulse-dot: pulse-dot 1.1s ease-in-out infinite;
+  --animate-bob: bob 2.4s ease-in-out infinite;
+  --animate-bob-slow: bob 3s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-pop-in: pop-in 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+
+  /* Celebration set — unused until the effects pass, but the handoff calls
+     these "the retention mechanic, not decoration", so they live with the
+     rest of the system rather than in whichever component lands first. */
+  --animate-word-out: word-out 1.2s ease-out forwards;
+  --animate-rocket-up: rocket-up 1.15s cubic-bezier(0.5, 0, 0.75, 0.2) forwards;
+  --animate-flame: flame 0.09s linear infinite;
+  --animate-clash-l: clash-l 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) forwards;
+  --animate-clash-r: clash-r 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) forwards;
+  --animate-star-pop: star-pop 0.7s ease-out forwards;
+  --animate-flash-bg: flash-bg 0.5s linear forwards;
+  /* `burst` takes its duration/delay per particle (0.8-1.3s, staggered), so
+     it is applied inline rather than as a token. Keyframes below. */
+
+  @keyframes spin-rays {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes spin-back {
+    to {
+      transform: rotate(-360deg);
+    }
+  }
+  @keyframes pulse-dot {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.35;
+      transform: scale(0.7);
+    }
+  }
+  @keyframes bob {
+    0%,
+    100% {
+      transform: translateY(0) rotate(-4deg);
+    }
+    50% {
+      transform: translateY(-10px) rotate(4deg);
+    }
+  }
+  @keyframes shimmer {
+    0% {
+      background-position: 0 0;
+    }
+    100% {
+      background-position: 80px 0;
+    }
+  }
+  @keyframes pop-in {
+    0% {
+      transform: scale(0.2) rotate(-18deg);
+      opacity: 0;
+    }
+    60% {
+      transform: scale(1.18) rotate(4deg);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1) rotate(-3deg);
+      opacity: 1;
+    }
+  }
+  @keyframes word-out {
+    0% {
+      transform: scale(0.3) rotate(-12deg);
+      opacity: 0;
+    }
+    25% {
+      transform: scale(1.1) rotate(-6deg);
+      opacity: 1;
+    }
+    75% {
+      transform: scale(1) rotate(-6deg);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1.6) rotate(-6deg);
+      opacity: 0;
+    }
+  }
+  @keyframes burst {
+    0% {
+      transform: translate(0, 0) rotate(0deg) scale(0.3);
+      opacity: 1;
+    }
+    70% {
+      opacity: 1;
+    }
+    100% {
+      transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1);
+      opacity: 0;
+    }
+  }
+  @keyframes rocket-up {
+    0% {
+      transform: translateY(0) scale(0.6);
+    }
+    18% {
+      transform: translateY(30px) scale(1.15);
+    }
+    100% {
+      transform: translateY(-760px) scale(0.85);
+    }
+  }
+  @keyframes flame {
+    0%,
+    100% {
+      transform: scaleY(1) scaleX(1);
+      opacity: 0.95;
+    }
+    50% {
+      transform: scaleY(1.5) scaleX(0.7);
+      opacity: 0.7;
+    }
+  }
+  @keyframes clash-l {
+    0% {
+      transform: translateX(-260px) rotate(-40deg) scale(0.7);
+    }
+    55% {
+      transform: translateX(-18px) rotate(10deg) scale(1.2);
+    }
+    70% {
+      transform: translateX(-46px) rotate(-6deg) scale(1.05);
+    }
+    100% {
+      transform: translateX(-30px) rotate(0deg) scale(1);
+      opacity: 0;
+    }
+  }
+  @keyframes clash-r {
+    0% {
+      transform: translateX(260px) rotate(40deg) scale(0.7);
+    }
+    55% {
+      transform: translateX(18px) rotate(-10deg) scale(1.2);
+    }
+    70% {
+      transform: translateX(46px) rotate(6deg) scale(1.05);
+    }
+    100% {
+      transform: translateX(30px) rotate(0deg) scale(1);
+      opacity: 0;
+    }
+  }
+  @keyframes star-pop {
+    0% {
+      transform: scale(0) rotate(0deg);
+      opacity: 0;
+    }
+    40% {
+      transform: scale(1.3) rotate(25deg);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(2.4) rotate(60deg);
+      opacity: 0;
+    }
+  }
+  @keyframes flash-bg {
+    0% {
+      opacity: 0;
+    }
+    15% {
+      opacity: 0.85;
+    }
+    100% {
+      opacity: 0;
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* next/font sets these on <html>; `inline` binds the utilities straight to
+   them instead of adding a layer of indirection. */
+@theme inline {
+  --font-display: var(--font-anton), "Anton", sans-serif;
+  --font-sans: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+}
+
+/* ---------------------------------------------------------------------------
+ * Utilities the design leans on repeatedly.
+ * ------------------------------------------------------------------------- */
+
+/* Outlined display type — yellow Anton with an ink stroke (screen 3's title,
+   the celebration word marks). `paint-order` is what keeps the stroke behind
+   the fill instead of eating into the glyph. */
+@utility text-stroke-* {
+  /* calc() rather than a bare `--value(integer) px`: that form compiles to
+     `6 px` (with a space), which is invalid CSS and silently does nothing. */
+  -webkit-text-stroke: calc(--value(integer) * 1px) var(--color-ink);
+  paint-order: stroke fill;
+}
+
+/* The off-state convention: an inactive pill/row looks *pressed down*.
+   Used by attribution pills, item-type chips and crew toggles alike. */
+@utility sticker-off {
+  opacity: 0.55;
+  box-shadow: none;
+  transform: translateY(5px);
+}
+
+@layer base {
+  body {
+    background: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  /* Anton is a display face with no lowercase design intent — the handoff
+     specifies it as "always uppercase". Applied here so `font-display` alone
+     carries the rule and no caller has to remember `uppercase`. */
+  .font-display {
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    line-height: 0.95;
+  }
+}
+
+/* The handoff requires a reduced-motion variant. Decorative loops stop
+   entirely; one-shot feedback (press states, pop-in) is left alone because it
+   communicates state rather than decorating it. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin-rays,
+  .animate-spin-rays-slow,
+  .animate-spin-rays-slowest,
+  .animate-spin-back,
+  .animate-pulse-dot,
+  .animate-bob,
+  .animate-bob-slow,
+  .animate-shimmer,
+  .animate-flame {
+    animation: none !important;
+  }
 }

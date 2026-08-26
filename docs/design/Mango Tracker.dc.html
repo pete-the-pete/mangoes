@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#FFF1D6; font-family:'Space Grotesk',sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:#FF2D6F; text-decoration:none; }
+  a:hover { color:#10312B; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes spinBack { to { transform: rotate(-360deg); } }
+  @keyframes pulseDot { 0%,100% { opacity:1; transform:scale(1);} 50% { opacity:.35; transform:scale(.7);} }
+  @keyframes bob { 0%,100% { transform: translateY(0) rotate(-4deg);} 50% { transform: translateY(-10px) rotate(4deg);} }
+  @keyframes popIn { 0% { transform: scale(.2) rotate(-18deg); opacity:0;} 60% { transform: scale(1.18) rotate(4deg); opacity:1;} 100% { transform: scale(1) rotate(-3deg); opacity:1;} }
+  @keyframes wordOut { 0% { transform: scale(.3) rotate(-12deg); opacity:0;} 25% { transform: scale(1.1) rotate(-6deg); opacity:1;} 75% { transform: scale(1) rotate(-6deg); opacity:1;} 100% { transform: scale(1.6) rotate(-6deg); opacity:0;} }
+  @keyframes burst { 0% { transform: translate(0,0) rotate(0deg) scale(.3); opacity:1;} 70% { opacity:1;} 100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1); opacity:0;} }
+  @keyframes rocketUp { 0% { transform: translateY(0) scale(.6); } 18% { transform: translateY(30px) scale(1.15);} 100% { transform: translateY(-760px) scale(.85);} }
+  @keyframes flame { 0%,100% { transform: scaleY(1) scaleX(1); opacity:.95;} 50% { transform: scaleY(1.5) scaleX(.7); opacity:.7;} }
+  @keyframes clashL { 0% { transform: translateX(-260px) rotate(-40deg) scale(.7);} 55% { transform: translateX(-18px) rotate(10deg) scale(1.2);} 70% { transform: translateX(-46px) rotate(-6deg) scale(1.05);} 100% { transform: translateX(-30px) rotate(0deg) scale(1); opacity:0;} }
+  @keyframes clashR { 0% { transform: translateX(260px) rotate(40deg) scale(.7);} 55% { transform: translateX(18px) rotate(-10deg) scale(1.2);} 70% { transform: translateX(46px) rotate(6deg) scale(1.05);} 100% { transform: translateX(30px) rotate(0deg) scale(1); opacity:0;} }
+  @keyframes starPop { 0% { transform: scale(0) rotate(0deg); opacity:0;} 40% { transform: scale(1.3) rotate(25deg); opacity:1;} 100% { transform: scale(2.4) rotate(60deg); opacity:0;} }
+  @keyframes flashBg { 0% { opacity:0;} 15% { opacity:.85;} 100% { opacity:0;} }
+  @keyframes shimmer { 0% { background-position: 0 0;} 100% { background-position: 80px 0;} }
+</style>
+</helmet>
+
+<div style="min-height:100vh; padding:56px 48px 90px; background:
+     radial-gradient(circle at 50% -10%, #FFD400 0%, #FFB300 22%, #FF7A18 46%, #FF2D6F 78%);
+     background-attachment:fixed; box-sizing:border-box;">
+
+  <div style="max-width:1500px; margin:0 auto; display:flex; flex-direction:column; gap:52px;">
+
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:32px; flex-wrap:wrap;">
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <div style="font-family:'Space Grotesk'; font-weight:700; font-size:15px; letter-spacing:.28em; color:#10312B; background:#FFF1D6; border:4px solid #10312B; padding:8px 16px; border-radius:99px; box-shadow:5px 5px 0 #10312B;">V1 · MOBILE PWA</div>
+          <div style="font-family:'Space Grotesk'; font-weight:700; font-size:15px; letter-spacing:.28em; color:#FFF1D6;">THE CORE LOOP</div>
+        </div>
+        <h1 style="font-family:Anton,sans-serif; font-size:104px; line-height:.86; margin:0; color:#FFF1D6; letter-spacing:-.01em; text-shadow:8px 8px 0 #10312B;">MANGO<br>TRACKER</h1>
+      </div>
+      <div style="font-family:Anton,sans-serif; font-size:22px; line-height:1.05; color:#10312B; background:#00E0CC; border:5px solid #10312B; padding:18px 22px; border-radius:6px; transform:rotate(4deg); box-shadow:8px 8px 0 #10312B; max-width:320px;">TAP A MANGO.<br>BREAK THE INTERNET.<br><span style="font-family:'Space Grotesk'; font-weight:700; font-size:13px; letter-spacing:.18em;">SIDE EFFECTS MAY INCLUDE FIREWORKS</span></div>
+    </div>
+
+    <div style="display:flex; gap:56px; flex-wrap:wrap; align-items:flex-start;">
+
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <div style="font-family:Anton,sans-serif; font-size:30px; color:#10312B; background:#FFF1D6; border:5px solid #10312B; padding:6px 18px; border-radius:99px; align-self:flex-start; box-shadow:6px 6px 0 #10312B;">1 · LOG IT <span style="font-family:'Space Grotesk'; font-weight:700; font-size:13px; letter-spacing:.14em;">(TAP THE MANGO →)</span></div>
+
+        <div style="position:relative; width:404px; height:846px; border:8px solid #10312B; border-radius:52px; background:#FFF1D6; overflow:hidden; box-shadow:16px 16px 0 rgba(16,49,43,.45);">
+
+          <div style="position:absolute; inset:0; background:
+               repeating-linear-gradient(180deg, #FF8A1E 0 84px, #FF7A18 84px 168px);
+               opacity:.16;"></div>
+          <div style="position:absolute; left:50%; top:300px; width:900px; height:900px; margin-left:-450px; border-radius:50%; background:repeating-conic-gradient(from 0deg, rgba(255,212,0,.55) 0deg 9deg, rgba(255,241,214,0) 9deg 18deg); animation:spin 44s linear infinite;"></div>
+
+          <div style="position:relative; height:100%; display:flex; flex-direction:column;">
+
+            <div style="padding:20px 22px 0; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+              <div style="display:flex; align-items:center; gap:9px; background:#10312B; color:#FFF1D6; border-radius:99px; padding:9px 15px 9px 12px;">
+                <div style="width:11px; height:11px; border-radius:50%; background:#00E0CC; animation:pulseDot 1.1s ease-in-out infinite;"></div>
+                <div style="font-weight:700; font-size:13px; letter-spacing:.16em;">{{ sessionLabel }}</div>
+              </div>
+              <div style="display:flex; align-items:center;">
+                <div style="width:38px; height:38px; border-radius:50%; background:#FF2D6F; border:3px solid #10312B; font-family:Anton; font-size:16px; color:#FFF1D6; display:flex; align-items:center; justify-content:center;">P</div>
+                <div style="width:38px; height:38px; border-radius:50%; background:#00E0CC; border:3px solid #10312B; margin-left:-12px; font-family:Anton; font-size:16px; color:#10312B; display:flex; align-items:center; justify-content:center;">D</div>
+                <div style="width:38px; height:38px; border-radius:50%; background:#FFD400; border:3px solid #10312B; margin-left:-12px; font-family:Anton; font-size:14px; color:#10312B; display:flex; align-items:center; justify-content:center;">+4</div>
+              </div>
+            </div>
+
+            <div style="padding:22px 22px 0; display:flex; align-items:flex-end; gap:14px;">
+              <div style="font-family:Anton,sans-serif; font-size:150px; line-height:.78; color:#10312B; text-shadow:6px 6px 0 #FFD400;">{{ meCount }}</div>
+              <div style="padding-bottom:16px;">
+                <div style="font-family:Anton; font-size:26px; line-height:.95; color:#10312B;">MANGOES<br>EATEN</div>
+                <div style="font-weight:700; font-size:13px; letter-spacing:.14em; color:#B8380B; margin-top:4px;">{{ rankLabel }}</div>
+              </div>
+            </div>
+
+            <div style="flex:1; display:flex; align-items:center; justify-content:center; position:relative;">
+
+              <div style="position:absolute; inset:0; overflow:hidden; pointer-events:none;">
+                <sc-if value="{{ fxFlash }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute; inset:-200px; background:#FFF1D6; animation:flashBg .5s ease-out forwards;"></div>
+                </sc-if>
+
+                <sc-for list="{{ particles }}" as="p" hint-placeholder-count="0">
+                  <div style="{{ p.style }}">🥭</div>
+                </sc-for>
+
+                <sc-if value="{{ fxRocket }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute; left:50%; top:52%; margin-left:-46px; animation:rocketUp 1.15s cubic-bezier(.5,0,.75,.2) forwards;">
+                    <div style="font-size:92px; line-height:1; transform:rotate(-14deg);">🥭</div>
+                    <div style="position:absolute; left:50%; top:78px; margin-left:-22px; width:44px; height:120px; border-radius:50% 50% 40% 40%; background:linear-gradient(180deg,#FFD400,#FF2D6F 70%,rgba(255,45,111,0)); animation:flame .09s linear infinite;"></div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ fxClash }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute; left:50%; top:50%; width:0; height:0;">
+                    <div style="position:absolute; left:-60px; top:-60px; font-size:110px; line-height:1; animation:clashL .6s cubic-bezier(.3,1.6,.5,1) forwards;">🥭</div>
+                    <div style="position:absolute; left:-60px; top:-60px; font-size:110px; line-height:1; animation:clashR .6s cubic-bezier(.3,1.6,.5,1) forwards; transform-origin:center;">🥭</div>
+                    <div style="position:absolute; left:-130px; top:-130px; width:260px; height:260px; background:#FFD400; border:6px solid #10312B; clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%); animation:starPop .7s .34s ease-out forwards; opacity:0;"></div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ fxWord }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute; left:0; right:0; top:34%; text-align:center; animation:wordOut 1.2s ease-out forwards;">
+                    <div style="font-family:Anton,sans-serif; font-size:74px; line-height:.9; color:#FFD400; -webkit-text-stroke:7px #10312B; paint-order:stroke fill; letter-spacing:.01em;">{{ fxWordText }}</div>
+                  </div>
+                </sc-if>
+              </div>
+
+              <button type="button" onClick="{{ onTap }}" style="position:relative; width:268px; height:268px; border-radius:50%; border:8px solid #10312B; background:#FFD400; cursor:pointer; padding:0; box-shadow:0 14px 0 #B8380B, 0 14px 0 8px #10312B;" style-active="transform: translateY(9px); box-shadow: 0 5px 0 #B8380B, 0 5px 0 8px #10312B;">
+                <div style="position:absolute; inset:8px; border-radius:50%; background:repeating-conic-gradient(from 0deg, #FF7A18 0deg 15deg, #FFD400 15deg 30deg); animation:spinBack 18s linear infinite; opacity:.9;"></div>
+                <div style="position:absolute; inset:38px; border-radius:50%; background:#FFF1D6; border:5px solid #10312B;"></div>
+                <div style="position:relative; font-size:118px; line-height:1; animation:bob 2.4s ease-in-out infinite;">🥭</div>
+              </button>
+            </div>
+
+            <div style="padding:0 22px; display:flex; gap:10px;">
+              <button type="button" onClick="{{ setMine }}" style="{{ mineStyle }}">JUST ME</button>
+              <button type="button" onClick="{{ setShared }}" style="{{ sharedStyle }}">SHARED 🍽</button>
+            </div>
+
+            <div style="margin:18px 14px 14px; background:#10312B; border-radius:26px; padding:14px 16px 16px; color:#FFF1D6;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div style="font-family:Anton; font-size:19px; letter-spacing:.04em;">GROUP TOTAL</div>
+                <div style="display:flex; align-items:center; gap:7px; font-size:12px; font-weight:700; letter-spacing:.1em; color:#FFD400;">
+                  <div style="width:8px; height:8px; border-radius:50%; background:#FFD400;"></div>{{ syncLabel }}
+                </div>
+              </div>
+              <div style="display:flex; align-items:baseline; gap:10px;">
+                <div style="font-family:Anton; font-size:56px; line-height:.8; color:#FFD400;">{{ totalCount }}</div>
+                <div style="font-weight:700; font-size:13px; letter-spacing:.12em; opacity:.7;">/ 100 TO THE GOAL</div>
+              </div>
+              <div style="margin-top:12px; height:22px; border-radius:99px; background:#0A2019; border:3px solid #FFF1D6; overflow:hidden;">
+                <div style="height:100%; width:{{ totalPct }}; background:repeating-linear-gradient(115deg,#FF2D6F 0 14px,#FF7A18 14px 28px); animation:shimmer 1.4s linear infinite; transition:width .5s cubic-bezier(.2,1.6,.4,1);"></div>
+              </div>
+            </div>
+
+            <div style="display:flex; border-top:5px solid #10312B; background:#FFF1D6;">
+              <div style="flex:1; text-align:center; padding:16px 0 26px; font-family:Anton; font-size:17px; color:#10312B; background:#FFD400; border-right:5px solid #10312B;">LOG</div>
+              <div style="flex:1; text-align:center; padding:16px 0 26px; font-family:Anton; font-size:17px; color:#10312B; opacity:.5; border-right:5px solid #10312B;">BOARD</div>
+              <div style="flex:1; text-align:center; padding:16px 0 26px; font-family:Anton; font-size:17px; color:#10312B; opacity:.5;">RECAP</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <div style="font-family:Anton,sans-serif; font-size:30px; color:#10312B; background:#00E0CC; border:5px solid #10312B; padding:6px 18px; border-radius:99px; align-self:flex-start; box-shadow:6px 6px 0 #10312B;">2 · TALK TRASH</div>
+
+        <div style="position:relative; width:404px; height:846px; border:8px solid #10312B; border-radius:52px; background:#00C2B0; overflow:hidden; box-shadow:16px 16px 0 rgba(16,49,43,.45);">
+          <div style="position:absolute; inset:0; background:repeating-linear-gradient(-45deg, rgba(255,241,214,.16) 0 22px, rgba(255,241,214,0) 22px 44px);"></div>
+
+          <div style="position:relative; padding:22px 22px 0;">
+            <div style="font-family:Anton; font-size:46px; line-height:.85; color:#FFF1D6; text-shadow:5px 5px 0 #10312B;">THE LEADERBOARD</div>
+            <div style="display:inline-block; margin-top:10px; font-weight:700; font-size:12px; letter-spacing:.2em; color:#10312B; background:#FFD400; border:3px solid #10312B; border-radius:99px; padding:5px 14px;">CABO DAY 3 · 4H 12M LEFT</div>
+          </div>
+
+          <div style="position:relative; margin:14px 14px 0; display:flex; flex-direction:column; gap:8px;">
+            <sc-for list="{{ board }}" as="row" hint-placeholder-count="6">
+              <div style="{{ row.wrap }}">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <div style="font-family:Anton; font-size:25px; width:26px; color:#10312B;">{{ row.rank }}</div>
+                  <div style="width:36px; height:36px; border-radius:50%; border:4px solid #10312B; background:{{ row.color }}; font-family:Anton; font-size:16px; color:#10312B; display:flex; align-items:center; justify-content:center;">{{ row.initial }}</div>
+                  <div style="flex:1;">
+                    <div style="font-family:Anton; font-size:20px; line-height:1; color:#10312B;">{{ row.name }}</div>
+                    <div style="font-weight:700; font-size:10px; letter-spacing:.12em; color:#10312B; opacity:.6;">{{ row.note }}</div>
+                  </div>
+                  <div style="font-family:Anton; font-size:34px; line-height:.8; color:#10312B;">{{ row.count }}</div>
+                </div>
+                <div style="margin-top:7px; height:11px; border-radius:99px; background:rgba(16,49,43,.14); overflow:hidden;">
+                  <div style="height:100%; width:{{ row.pct }}; border-radius:99px; background:{{ row.color }}; border-right:3px solid #10312B;"></div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="position:relative; margin:14px 14px 0; background:#10312B; color:#FFF1D6; border-radius:24px; padding:14px 16px; display:flex; align-items:center; gap:12px;">
+            <div style="font-size:32px; animation:bob 2.8s ease-in-out infinite;">🥭</div>
+            <div>
+              <div style="font-family:Anton; font-size:20px; line-height:1; color:#FFD400;">DAVE JUST PASSED YOU</div>
+              <div style="font-weight:700; font-size:11px; letter-spacing:.1em; opacity:.75; margin-top:4px;">2 MINUTES AGO. ARE YOU GONNA TAKE THAT?</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <div style="font-family:Anton,sans-serif; font-size:30px; color:#FFF1D6; background:#FF2D6F; border:5px solid #10312B; padding:6px 18px; border-radius:99px; align-self:flex-start; box-shadow:6px 6px 0 #10312B;">3 · THE RECAP</div>
+
+        <div style="position:relative; width:404px; height:846px; border:8px solid #10312B; border-radius:52px; background:#FF2D6F; overflow:hidden; box-shadow:16px 16px 0 rgba(16,49,43,.45);">
+          <div style="position:absolute; left:50%; top:180px; width:1000px; height:1000px; margin-left:-500px; border-radius:50%; background:repeating-conic-gradient(from 0deg, rgba(255,212,0,.5) 0deg 10deg, rgba(255,45,111,0) 10deg 20deg); animation:spin 60s linear infinite;"></div>
+
+          <div style="position:relative; padding:26px 22px 0; text-align:center;">
+            <div style="font-weight:700; font-size:12px; letter-spacing:.28em; color:#FFF1D6;">SESSION CLOSED · CABO DAY 3</div>
+            <div style="font-family:Anton; font-size:56px; line-height:.84; color:#FFD400; -webkit-text-stroke:6px #10312B; paint-order:stroke fill; margin-top:8px;">MANGO KING</div>
+            <div style="margin:14px auto 0; width:130px; height:130px; border-radius:50%; background:#FFD400; border:7px solid #10312B; display:flex; align-items:center; justify-content:center; font-size:70px; animation:bob 3s ease-in-out infinite; box-shadow:0 10px 0 #10312B;">🥭</div>
+            <div style="font-family:Anton; font-size:40px; line-height:1; color:#FFF1D6; margin-top:14px; text-shadow:4px 4px 0 #10312B;">DAVE</div>
+            <div style="font-weight:700; font-size:12px; letter-spacing:.16em; color:#10312B; background:#FFF1D6; border:3px solid #10312B; border-radius:99px; padding:5px 14px; display:inline-block; margin-top:8px;">19 MANGOES · UNDEFEATED</div>
+          </div>
+
+          <div style="position:relative; margin:20px 14px 0; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div style="background:#FFF1D6; border:5px solid #10312B; border-radius:22px; padding:12px 14px;">
+              <div style="font-family:Anton; font-size:42px; line-height:.85; color:#10312B;">87</div>
+              <div style="font-weight:700; font-size:11px; letter-spacing:.14em; color:#B8380B;">TOTAL MANGOES</div>
+            </div>
+            <div style="background:#FFD400; border:5px solid #10312B; border-radius:22px; padding:12px 14px;">
+              <div style="font-family:Anton; font-size:42px; line-height:.85; color:#10312B;">6</div>
+              <div style="font-weight:700; font-size:11px; letter-spacing:.14em; color:#B8380B;">MANGO ATHLETES</div>
+            </div>
+            <div style="background:#00E0CC; border:5px solid #10312B; border-radius:22px; padding:12px 14px;">
+              <div style="font-family:Anton; font-size:42px; line-height:.85; color:#10312B;">11PM</div>
+              <div style="font-weight:700; font-size:11px; letter-spacing:.14em; color:#10312B;">PEAK MANGO HOUR</div>
+            </div>
+            <div style="background:#FFF1D6; border:5px solid #10312B; border-radius:22px; padding:12px 14px;">
+              <div style="font-family:Anton; font-size:42px; line-height:.85; color:#10312B;">23</div>
+              <div style="font-weight:700; font-size:11px; letter-spacing:.14em; color:#B8380B;">SHARED W/ GROUP</div>
+            </div>
+          </div>
+
+          <div style="position:relative; margin:12px 14px 0; background:#10312B; border-radius:22px; padding:12px 16px; color:#FFF1D6;">
+            <div style="font-family:Anton; font-size:18px; color:#FFD400;">AWARD: THE LATE BLOOMER</div>
+            <div style="font-weight:500; font-size:12px; line-height:1.3; margin-top:4px; opacity:.85;">Sam logged 7 mangoes in the last 20 minutes. We all saw it, Sam.</div>
+          </div>
+
+          <div style="position:relative; margin:14px 14px 0;">
+            <div style="background:#FFD400; border:6px solid #10312B; border-radius:99px; padding:14px 0; text-align:center; font-family:Anton; font-size:23px; color:#10312B; box-shadow:0 9px 0 #10312B;">SEND IT TO THE GROUP CHAT</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div style="display:flex; align-items:center; gap:20px; margin-top:10px;">
+      <div style="height:8px; flex:1; background:repeating-linear-gradient(90deg,#10312B 0 22px, rgba(0,0,0,0) 22px 40px);"></div>
+      <div style="font-family:Anton,sans-serif; font-size:44px; color:#10312B; background:#FFF1D6; border:6px solid #10312B; padding:8px 26px; border-radius:8px; transform:rotate(-1.5deg); box-shadow:9px 9px 0 #10312B;">ADMIN SIDE 🎛</div>
+      <div style="height:8px; flex:1; background:repeating-linear-gradient(90deg,#10312B 0 22px, rgba(0,0,0,0) 22px 40px);"></div>
+    </div>
+
+    <div style="display:flex; gap:56px; flex-wrap:wrap; align-items:flex-start;">
+
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <div style="font-family:Anton,sans-serif; font-size:30px; color:#10312B; background:#FFD400; border:5px solid #10312B; padding:6px 18px; border-radius:99px; align-self:flex-start; box-shadow:6px 6px 0 #10312B;">4 · SPIN IT UP <span style="font-family:'Space Grotesk'; font-weight:700; font-size:13px; letter-spacing:.14em;">(UNDER 60s)</span></div>
+
+        <div style="position:relative; width:404px; height:846px; border:8px solid #10312B; border-radius:52px; background:#FFF1D6; overflow:hidden; box-shadow:16px 16px 0 rgba(16,49,43,.45);">
+          <div style="position:absolute; inset:0; background:repeating-linear-gradient(90deg, rgba(16,49,43,.06) 0 1px, rgba(0,0,0,0) 1px 26px), repeating-linear-gradient(0deg, rgba(16,49,43,.06) 0 1px, rgba(0,0,0,0) 1px 26px);"></div>
+
+          <div style="position:relative; padding:24px 22px 0;">
+            <div style="font-weight:700; font-size:12px; letter-spacing:.24em; color:#B8380B;">GROUP ADMIN · CABO CREW</div>
+            <div style="font-family:Anton; font-size:52px; line-height:.84; color:#10312B; margin-top:6px;">NEW SESSION</div>
+          </div>
+
+          <div style="position:relative; padding:18px 18px 0; display:flex; flex-direction:column; gap:14px;">
+            <div style="background:#FFFFFF; border:5px solid #10312B; border-radius:20px; padding:11px 14px; box-shadow:0 6px 0 #10312B;">
+              <div style="font-weight:700; font-size:10px; letter-spacing:.2em; color:#B8380B;">SESSION NAME</div>
+              <div style="font-family:Anton; font-size:29px; line-height:1.1; color:#10312B;">{{ draftName }}</div>
+            </div>
+
+            <div style="display:flex; gap:12px;">
+              <div style="flex:1; background:#00E0CC; border:5px solid #10312B; border-radius:20px; padding:11px 14px; box-shadow:0 6px 0 #10312B;">
+                <div style="font-weight:700; font-size:10px; letter-spacing:.2em; color:#10312B; opacity:.7;">STARTS</div>
+                <div style="font-family:Anton; font-size:24px; color:#10312B;">SAT 9:00A</div>
+              </div>
+              <div style="flex:1; background:#FF2D6F; border:5px solid #10312B; border-radius:20px; padding:11px 14px; box-shadow:0 6px 0 #10312B;">
+                <div style="font-weight:700; font-size:10px; letter-spacing:.2em; color:#FFF1D6; opacity:.8;">ENDS</div>
+                <div style="font-family:Anton; font-size:24px; color:#FFF1D6;">SAT 11:59P</div>
+              </div>
+            </div>
+
+            <div>
+              <div style="font-weight:700; font-size:10px; letter-spacing:.2em; color:#B8380B; margin-bottom:8px;">WHAT ARE WE COUNTING? (TAP)</div>
+              <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                <sc-for list="{{ itemChips }}" as="chip" hint-placeholder-count="5">
+                  <button type="button" onClick="{{ chip.toggle }}" style="{{ chip.style }}">{{ chip.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="background:#10312B; border-radius:20px; padding:13px 15px; color:#FFF1D6;">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <div>
+                  <div style="font-family:Anton; font-size:20px; color:#FFD400;">INVITE THE WHOLE GROUP</div>
+                  <div style="font-weight:700; font-size:11px; letter-spacing:.1em; opacity:.7; margin-top:3px;">{{ inviteLine }}</div>
+                </div>
+                <button type="button" onClick="{{ toggleAll }}" style="{{ switchStyle }}"><div style="{{ knobStyle }}"></div></button>
+              </div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:12px; background:#FFD400; border:5px solid #10312B; border-radius:20px; padding:11px 14px;">
+              <div style="font-size:26px;">🔗</div>
+              <div style="flex:1;">
+                <div style="font-family:Anton; font-size:18px; color:#10312B;">mango.trk/cabo-d3</div>
+                <div style="font-weight:700; font-size:10px; letter-spacing:.14em; color:#B8380B;">INVITE LINK · EXPIRES IN 24H</div>
+              </div>
+              <div style="font-family:Anton; font-size:14px; color:#FFF1D6; background:#10312B; border-radius:99px; padding:6px 12px;">COPY</div>
+            </div>
+          </div>
+
+          <div style="position:absolute; left:18px; right:18px; bottom:22px;">
+            <div style="background:#FF7A18; border:6px solid #10312B; border-radius:99px; padding:17px 0; text-align:center; font-family:Anton; font-size:28px; color:#FFF1D6; box-shadow:0 10px 0 #10312B; text-shadow:3px 3px 0 #10312B;">GO LIVE 🚀</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <div style="font-family:Anton,sans-serif; font-size:30px; color:#FFF1D6; background:#10312B; border:5px solid #10312B; padding:6px 18px; border-radius:99px; align-self:flex-start; box-shadow:6px 6px 0 #10312B;">5 · MISSION CONTROL <span style="font-family:'Space Grotesk'; font-weight:700; font-size:13px; letter-spacing:.14em; color:#FFD400;">(TAP ±)</span></div>
+
+        <div style="position:relative; width:404px; height:846px; border:8px solid #10312B; border-radius:52px; background:#10312B; overflow:hidden; box-shadow:16px 16px 0 rgba(16,49,43,.45);">
+          <div style="position:absolute; inset:0; background:repeating-linear-gradient(45deg, rgba(255,212,0,.07) 0 18px, rgba(0,0,0,0) 18px 36px);"></div>
+
+          <div style="position:relative; padding:22px 20px 0; display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div style="width:10px; height:10px; border-radius:50%; background:#00E0CC; animation:pulseDot 1.1s ease-in-out infinite;"></div>
+                <div style="font-weight:700; font-size:11px; letter-spacing:.2em; color:#00E0CC;">LIVE · 4H 12M LEFT</div>
+              </div>
+              <div style="font-family:Anton; font-size:42px; line-height:.86; color:#FFD400; margin-top:6px;">LOG FOR<br>ANYONE</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-family:Anton; font-size:44px; line-height:.8; color:#FFF1D6;">{{ totalCount }}</div>
+              <div style="font-weight:700; font-size:10px; letter-spacing:.16em; color:#FFF1D6; opacity:.6;">GROUP TOTAL</div>
+            </div>
+          </div>
+
+          <div style="position:relative; margin:16px 14px 0; display:flex; flex-direction:column; gap:7px;">
+            <sc-for list="{{ roster }}" as="r" hint-placeholder-count="6">
+              <div style="{{ r.wrap }}">
+                <div style="width:34px; height:34px; border-radius:50%; border:3px solid #10312B; background:{{ r.color }}; font-family:Anton; font-size:15px; color:#10312B; display:flex; align-items:center; justify-content:center;">{{ r.initial }}</div>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-family:Anton; font-size:19px; line-height:1; color:#10312B;">{{ r.name }}</div>
+                  <div style="font-weight:700; font-size:9px; letter-spacing:.12em; color:#10312B; opacity:.55;">{{ r.status }}</div>
+                </div>
+                <button type="button" onClick="{{ r.dec }}" style="width:34px; height:34px; border-radius:50%; border:3px solid #10312B; background:#FFF1D6; font-family:Anton; font-size:19px; color:#10312B; cursor:pointer; padding:0; line-height:1;">–</button>
+                <div style="font-family:Anton; font-size:26px; width:38px; text-align:center; color:#10312B;">{{ r.count }}</div>
+                <button type="button" onClick="{{ r.inc }}" style="width:34px; height:34px; border-radius:50%; border:3px solid #10312B; background:#FFD400; font-family:Anton; font-size:19px; color:#10312B; cursor:pointer; padding:0; line-height:1; box-shadow:0 4px 0 #10312B;">+</button>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="position:relative; margin:14px 14px 0; display:flex; gap:10px;">
+            <button type="button" onClick="{{ logGroup }}" style="flex:1; cursor:pointer; background:#00E0CC; border:5px solid #10312B; border-radius:20px; padding:12px 8px; font-family:Anton; font-size:17px; color:#10312B; box-shadow:0 6px 0 #FFF1D6;">+1 FOR THE GROUP</button>
+            <button type="button" onClick="{{ closeNow }}" style="flex:1; cursor:pointer; background:#FF2D6F; border:5px solid #10312B; border-radius:20px; padding:12px 8px; font-family:Anton; font-size:17px; color:#FFF1D6; box-shadow:0 6px 0 #FFF1D6;">{{ closeLabel }}</button>
+          </div>
+
+          <div style="position:relative; margin:14px 14px 0; background:#FFF1D6; border:5px solid #FFD400; border-radius:20px; padding:11px 14px; display:flex; align-items:center; gap:10px;">
+            <div style="font-size:22px;">✉️</div>
+            <div style="flex:1;">
+              <div style="font-family:Anton; font-size:17px; color:#10312B;">2 INVITES PENDING</div>
+              <div style="font-weight:700; font-size:10px; letter-spacing:.12em; color:#B8380B;">JO · SAM'S COUSIN</div>
+            </div>
+            <div style="font-family:Anton; font-size:13px; color:#FFF1D6; background:#10312B; border-radius:99px; padding:6px 11px;">NUDGE</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <div style="font-family:Anton,sans-serif; font-size:30px; color:#10312B; background:#FFF1D6; border:5px solid #10312B; padding:6px 18px; border-radius:99px; align-self:flex-start; box-shadow:6px 6px 0 #10312B;">6 · THE PAPER TRAIL</div>
+
+        <div style="position:relative; width:404px; height:846px; border:8px solid #10312B; border-radius:52px; background:#FF7A18; overflow:hidden; box-shadow:16px 16px 0 rgba(16,49,43,.45);">
+          <div style="position:absolute; inset:0; background:repeating-linear-gradient(180deg, rgba(16,49,43,.08) 0 40px, rgba(0,0,0,0) 40px 80px);"></div>
+
+          <div style="position:relative; padding:22px 20px 0;">
+            <div style="display:inline-block; font-weight:700; font-size:11px; letter-spacing:.2em; color:#FFF1D6; background:#10312B; border-radius:99px; padding:6px 13px;">SESSION CLOSED · ADMIN CAN AMEND</div>
+            <div style="font-family:Anton; font-size:50px; line-height:.86; color:#FFF1D6; margin-top:10px; text-shadow:5px 5px 0 #10312B;">AUDIT LOG</div>
+            <div style="font-weight:700; font-size:12px; letter-spacing:.12em; color:#10312B; margin-top:6px;">EVERY EDIT IS ON THE RECORD. NO TAKEBACKS.</div>
+          </div>
+
+          <div style="position:relative; margin:16px 14px 0; display:flex; flex-direction:column; gap:7px; max-height:492px; overflow:hidden;">
+            <sc-for list="{{ audit }}" as="e" hint-placeholder-count="8">
+              <div style="{{ e.wrap }}">
+                <div style="font-family:Anton; font-size:15px; width:52px; color:#B8380B;">{{ e.time }}</div>
+                <div style="flex:1;">
+                  <div style="font-weight:700; font-size:13px; line-height:1.25; color:#10312B;">{{ e.text }}</div>
+                  <div style="font-weight:700; font-size:9px; letter-spacing:.14em; color:#10312B; opacity:.5; margin-top:2px;">{{ e.by }}</div>
+                </div>
+                <div style="{{ e.tagStyle }}">{{ e.tag }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="position:absolute; left:14px; right:14px; bottom:20px; display:flex; gap:10px;">
+            <div style="flex:1; background:#10312B; border-radius:20px; padding:13px 8px; text-align:center; font-family:Anton; font-size:17px; color:#FFD400;">EXPORT CSV</div>
+            <div style="flex:1; background:#FFD400; border:5px solid #10312B; border-radius:20px; padding:11px 8px; text-align:center; font-family:Anton; font-size:17px; color:#10312B; box-shadow:0 6px 0 #10312B;">REOPEN 15 MIN</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div style="display:flex; align-items:center; gap:20px; margin-top:10px;">
+      <div style="height:8px; flex:1; background:repeating-linear-gradient(90deg,#10312B 0 22px, rgba(0,0,0,0) 22px 40px);"></div>
+      <div style="font-family:Anton,sans-serif; font-size:44px; color:#FFF1D6; background:#0A2019; border:6px solid #10312B; padding:8px 26px; border-radius:8px; transform:rotate(1.5deg); box-shadow:9px 9px 0 #FFD400;">THE TOP OF THE PYRAMID 👑</div>
+      <div style="height:8px; flex:1; background:repeating-linear-gradient(90deg,#10312B 0 22px, rgba(0,0,0,0) 22px 40px);"></div>
+    </div>
+
+    <div style="display:flex; gap:56px; flex-wrap:wrap; align-items:flex-start;">
+
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <div style="font-family:Anton,sans-serif; font-size:30px; color:#10312B; background:#00E0CC; border:5px solid #10312B; padding:6px 18px; border-radius:99px; align-self:flex-start; box-shadow:6px 6px 0 #10312B;">7 · NEW GROUP <span style="font-family:'Space Grotesk'; font-weight:700; font-size:13px; letter-spacing:.14em;">(TAP NAMES)</span></div>
+
+        <div style="position:relative; width:404px; height:846px; border:8px solid #10312B; border-radius:52px; background:#00C2B0; overflow:hidden; box-shadow:16px 16px 0 rgba(16,49,43,.45);">
+          <div style="position:absolute; inset:0; background:repeating-linear-gradient(-45deg, rgba(255,241,214,.14) 0 20px, rgba(0,0,0,0) 20px 40px);"></div>
+
+          <div style="position:relative; padding:24px 20px 0;">
+            <div style="font-weight:700; font-size:12px; letter-spacing:.24em; color:#10312B;">GROUP ADMIN · PETE</div>
+            <div style="font-family:Anton; font-size:50px; line-height:.84; color:#FFF1D6; margin-top:6px; text-shadow:5px 5px 0 #10312B;">BUILD A CREW</div>
+          </div>
+
+          <div style="position:relative; padding:16px 16px 104px; display:flex; flex-direction:column; gap:11px;">
+            <div style="background:#FFF1D6; border:5px solid #10312B; border-radius:20px; padding:11px 14px; box-shadow:0 6px 0 #10312B;">
+              <div style="font-weight:700; font-size:10px; letter-spacing:.2em; color:#B8380B;">GROUP NAME</div>
+              <div style="font-family:Anton; font-size:28px; line-height:1.1; color:#10312B;">Cabo Crew</div>
+            </div>
+
+            <div style="display:flex; gap:11px;">
+              <div style="flex:1; background:#FFD400; border:5px solid #10312B; border-radius:20px; padding:10px 13px;">
+                <div style="font-weight:700; font-size:10px; letter-spacing:.18em; color:#B8380B;">EMOJI</div>
+                <div style="font-size:28px; line-height:1.1;">🏝</div>
+              </div>
+              <div style="flex:2; background:#FFF1D6; border:5px solid #10312B; border-radius:20px; padding:10px 13px;">
+                <div style="font-weight:700; font-size:10px; letter-spacing:.18em; color:#B8380B;">DEFAULT ITEM</div>
+                <div style="font-family:Anton; font-size:22px; color:#10312B;">MANGO 🥭</div>
+              </div>
+            </div>
+
+            <div>
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <div style="font-weight:700; font-size:10px; letter-spacing:.2em; color:#10312B;">WHO'S IN THE CREW</div>
+                <div style="font-family:Anton; font-size:15px; color:#FFF1D6; background:#10312B; border-radius:99px; padding:3px 11px;">{{ crewCount }} PICKED</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:7px;">
+                <sc-for list="{{ crew }}" as="m" hint-placeholder-count="5">
+                  <button type="button" onClick="{{ m.toggle }}" style="{{ m.wrap }}">
+                    <div style="width:34px; height:34px; border-radius:50%; border:3px solid #10312B; background:{{ m.color }}; font-family:Anton; font-size:15px; color:#10312B; display:flex; align-items:center; justify-content:center;">{{ m.initial }}</div>
+                    <div style="flex:1; text-align:left;">
+                      <div style="font-family:Anton; font-size:19px; line-height:1; color:#10312B;">{{ m.name }}</div>
+                      <div style="font-weight:700; font-size:9px; letter-spacing:.12em; color:#10312B; opacity:.55;">{{ m.handle }}</div>
+                    </div>
+                    <div style="{{ m.check }}">{{ m.mark }}</div>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:11px; background:#10312B; border-radius:20px; padding:11px 14px;">
+              <div style="font-size:22px;">➕</div>
+              <div style="flex:1;">
+                <div style="font-family:Anton; font-size:17px; color:#FFD400;">INVITE SOMEONE NEW</div>
+                <div style="font-weight:700; font-size:9px; letter-spacing:.12em; color:#FFF1D6; opacity:.6;">SENDS A PLATFORM INVITE TOO</div>
+              </div>
+              <div style="font-family:Anton; font-size:13px; color:#10312B; background:#FFD400; border-radius:99px; padding:6px 11px;">EMAIL</div>
+            </div>
+          </div>
+
+          <div style="position:absolute; left:16px; right:16px; bottom:20px;">
+            <div style="background:#FF2D6F; border:6px solid #10312B; border-radius:99px; padding:16px 0; text-align:center; font-family:Anton; font-size:26px; color:#FFF1D6; box-shadow:0 10px 0 #10312B; text-shadow:3px 3px 0 #10312B;">CREATE GROUP</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <div style="font-family:Anton,sans-serif; font-size:30px; color:#FFD400; background:#0A2019; border:5px solid #10312B; padding:6px 18px; border-radius:99px; align-self:flex-start; box-shadow:6px 6px 0 #10312B;">8 · SUPER ADMIN <span style="font-family:'Space Grotesk'; font-weight:700; font-size:13px; letter-spacing:.14em; color:#FFF1D6;">(TAP ROLES)</span></div>
+
+        <div style="position:relative; width:404px; height:846px; border:8px solid #10312B; border-radius:52px; background:#0A2019; overflow:hidden; box-shadow:16px 16px 0 rgba(16,49,43,.45);">
+          <div style="position:absolute; left:50%; top:-260px; width:900px; height:900px; margin-left:-450px; border-radius:50%; background:repeating-conic-gradient(from 0deg, rgba(255,212,0,.13) 0deg 9deg, rgba(0,0,0,0) 9deg 18deg); animation:spin 70s linear infinite;"></div>
+
+          <div style="position:relative; padding:22px 20px 0;">
+            <div style="display:flex; align-items:center; gap:9px;">
+              <div style="font-size:20px;">👑</div>
+              <div style="font-weight:700; font-size:11px; letter-spacing:.22em; color:#FFD400;">SUPER ADMIN · PETE</div>
+            </div>
+            <div style="font-family:Anton; font-size:48px; line-height:.84; color:#FFF1D6; margin-top:8px;">WHO GETS<br>THE KEYS</div>
+          </div>
+
+          <div style="position:relative; margin:16px 14px 0; display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
+            <div style="background:#FFD400; border:4px solid #10312B; border-radius:16px; padding:9px 11px;">
+              <div style="font-family:Anton; font-size:30px; line-height:.85; color:#10312B;">{{ statUsers }}</div>
+              <div style="font-weight:700; font-size:9px; letter-spacing:.12em; color:#B8380B;">USERS</div>
+            </div>
+            <div style="background:#00E0CC; border:4px solid #10312B; border-radius:16px; padding:9px 11px;">
+              <div style="font-family:Anton; font-size:30px; line-height:.85; color:#10312B;">{{ statAdmins }}</div>
+              <div style="font-weight:700; font-size:9px; letter-spacing:.12em; color:#10312B;">ADMINS</div>
+            </div>
+            <div style="background:#FF2D6F; border:4px solid #10312B; border-radius:16px; padding:9px 11px;">
+              <div style="font-family:Anton; font-size:30px; line-height:.85; color:#FFF1D6;">4</div>
+              <div style="font-weight:700; font-size:9px; letter-spacing:.12em; color:#FFF1D6;">GROUPS</div>
+            </div>
+          </div>
+
+          <div style="position:relative; margin:14px 14px 0;">
+            <div style="font-weight:700; font-size:10px; letter-spacing:.2em; color:#FFD400; margin-bottom:8px;">PLATFORM ROSTER · TAP TO PROMOTE / DEMOTE</div>
+            <div style="display:flex; flex-direction:column; gap:7px;">
+              <sc-for list="{{ platform }}" as="u" hint-placeholder-count="6">
+                <button type="button" onClick="{{ u.cycle }}" style="{{ u.wrap }}">
+                  <div style="width:34px; height:34px; border-radius:50%; border:3px solid #10312B; background:{{ u.color }}; font-family:Anton; font-size:15px; color:#10312B; display:flex; align-items:center; justify-content:center;">{{ u.initial }}</div>
+                  <div style="flex:1; text-align:left; min-width:0;">
+                    <div style="font-family:Anton; font-size:19px; line-height:1; color:#10312B;">{{ u.name }}</div>
+                    <div style="font-weight:700; font-size:9px; letter-spacing:.1em; color:#10312B; opacity:.55;">{{ u.groups }}</div>
+                  </div>
+                  <div style="{{ u.badge }}">{{ u.role }}</div>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="position:relative; margin:14px 14px 0; background:#10312B; border:4px solid #FFD400; border-radius:20px; padding:11px 14px; display:flex; align-items:center; gap:11px;">
+            <div style="font-size:22px;">🚪</div>
+            <div style="flex:1;">
+              <div style="font-family:Anton; font-size:17px; color:#FFD400;">INVITE-ONLY · SIGNUP OFF</div>
+              <div style="font-weight:700; font-size:9px; letter-spacing:.12em; color:#FFF1D6; opacity:.6;">3 SEATS UNCLAIMED · 1 INVITE EXPIRED</div>
+            </div>
+            <div style="width:52px; height:28px; border-radius:99px; border:3px solid #FFD400; background:#FFD400; display:flex; align-items:center; justify-content:flex-end;"><div style="width:18px; height:18px; margin:0 3px; border-radius:50%; background:#0A2019;"></div></div>
+          </div>
+
+          <div style="position:absolute; left:14px; right:14px; bottom:20px; display:flex; gap:10px;">
+            <div style="flex:2; background:#FFD400; border:6px solid #10312B; border-radius:99px; padding:14px 0; text-align:center; font-family:Anton; font-size:22px; color:#10312B; box-shadow:0 9px 0 #FFF1D6;">INVITE TO PLATFORM</div>
+            <div style="flex:1; background:#0A2019; border:6px solid #FFF1D6; border-radius:99px; padding:14px 0; text-align:center; font-family:Anton; font-size:22px; color:#FFF1D6;">LOGS</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;sessionName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Cabo Day 3&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;effect&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Random&quot;,&quot;Rocket&quot;,&quot;Confetti&quot;,&quot;Clash&quot;],&quot;default&quot;:&quot;Random&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Delight&quot;}}">
+const EFFECTS = ["rocket", "confetti", "clash"];
+const WORDS = { rocket: "BLAST OFF!!", confetti: "MANGO RAIN!!", clash: "KA-CHUNK!!" };
+
+class Component extends DCLogic {
+  state = {
+    me: 12, total: 68, mode: "ME", fx: null, particles: [], queued: 3,
+    adj: {}, items: ["MANGO 🥭", "MARGARITA 🍹"], inviteAll: true, closed: false,
+    crewPicked: ["DAVE", "MARISOL", "SAM"],
+    roles: { DAVE: "ADMIN", MARISOL: "MEMBER", SAM: "MEMBER", JO: "MEMBER", "TIA R.": "INVITED" },
+    audit: [
+      { time: "11:41P", text: "Sam logged 3 mangoes in 90 seconds", by: "SAM · SELF", tag: "SUS" },
+      { time: "11:12P", text: "+1 untagged, for the group", by: "PETE · ADMIN", tag: "GROUP" },
+      { time: "10:58P", text: "Removed duplicate log for Dave", by: "PETE · ADMIN", tag: "EDIT" },
+      { time: "10:30P", text: "Marisol logged +1 (shared plate)", by: "MARISOL · SELF", tag: "SHARED" },
+      { time: "9:04P", text: "Jo accepted her invite", by: "SYSTEM", tag: "JOIN" },
+      { time: "9:00A", text: "Session opened · Cabo Day 3", by: "PETE · ADMIN", tag: "OPEN" }
+    ]
+  };
+
+  bump = (name, d) => this.setState(s => {
+    const adj = { ...s.adj, [name]: (s.adj[name] || 0) + d };
+    const t = new Date();
+    const h = t.getHours() % 12 || 12;
+    const stamp = h + ":" + String(t.getMinutes()).padStart(2, "0") + (t.getHours() < 12 ? "A" : "P");
+    return {
+      adj,
+      me: name === "YOU" ? Math.max(0, s.me + d) : s.me,
+      total: Math.max(0, s.total + d),
+      audit: [{ time: stamp, text: (d > 0 ? "+1 logged for " : "Removed 1 from ") + name.toLowerCase(), by: "PETE · ADMIN", tag: d > 0 ? "ON BEHALF" : "EDIT" }, ...s.audit]
+    };
+  });
+
+  componentWillUnmount() { clearTimeout(this._t); }
+
+  fire = () => {
+    const forced = this.props.effect && this.props.effect !== "Random" ? this.props.effect.toLowerCase() : null;
+    const kind = forced || EFFECTS[Math.floor(Math.random() * EFFECTS.length)];
+    let particles = [];
+    if (kind === "confetti") {
+      particles = Array.from({ length: 34 }, (_, i) => {
+        const a = Math.random() * Math.PI * 2, d = 130 + Math.random() * 260;
+        return {
+          style: `position:absolute; left:50%; top:50%; font-size:${18 + Math.random() * 34}px; line-height:1;` +
+            `--dx:${Math.cos(a) * d}px; --dy:${Math.sin(a) * d - 80}px; --rot:${(Math.random() * 900 - 450) | 0}deg;` +
+            `animation: burst ${0.8 + Math.random() * 0.5}s cubic-bezier(.15,.7,.3,1) ${(Math.random() * 0.18).toFixed(2)}s forwards; opacity:0;`
+        };
+      });
+    }
+    this.setState(s => ({
+      me: s.mode === "ME" ? s.me + 1 : s.me,
+      total: s.total + 1,
+      fx: kind,
+      particles,
+      queued: s.queued + 1
+    }));
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState({ fx: null, particles: [] }), 1500);
+  };
+
+  renderVals() {
+    const s = this.state;
+    const goal = 100;
+    const pill = (on, bg) => `flex:1; cursor:pointer; font-family:Anton,sans-serif; font-size:20px; letter-spacing:.02em; padding:14px 0; border-radius:99px; border:5px solid #10312B; background:${on ? bg : "rgba(255,241,214,.65)"}; color:#10312B; opacity:${on ? 1 : .55}; box-shadow:${on ? "0 6px 0 #10312B" : "none"}; transform:translateY(${on ? "0" : "6px"});`;
+
+    const base = [
+      { name: "DAVE", count: 19, note: "MANGO MENACE", status: "LOGGING SINCE 9AM", color: "#FFD400", initial: "D" },
+      { name: "YOU", count: s.me, note: "BREATHING DOWN HIS NECK", status: "THAT'S YOU", color: "#FF2D6F", initial: "P" },
+      { name: "MARISOL", count: 11, note: "PACING HERSELF", status: "SYNCED 2M AGO", color: "#FFF1D6", initial: "M" },
+      { name: "SAM", count: 9, note: "LATE BLOOMER", status: "PHONE IN THE OCEAN", color: "#FF7A18", initial: "S" },
+      { name: "JO", count: 6, note: "HERE FOR THE VIBES", status: "INVITE PENDING", color: "#FFF1D6", initial: "J" },
+      { name: "THE GROUP", count: 10, note: "SHARED / UNTAGGED", status: "UNTAGGED BUCKET", color: "#00E0CC", initial: "★" }
+    ].map(p => ({ ...p, count: Math.max(0, p.count + (p.name === "YOU" ? 0 : (s.adj[p.name] || 0))) }));
+    const people = [...base].sort((a, b) => b.count - a.count);
+    const ALL_ITEMS = ["MANGO 🥭", "MARGARITA 🍹", "TACO 🌮", "BEER 🍺", "OYSTER 🦪"];
+    const tagColor = { "ON BEHALF": "#FFD400", GROUP: "#00E0CC", EDIT: "#FF2D6F", SUS: "#FF2D6F", SHARED: "#00E0CC", JOIN: "#FFF1D6", OPEN: "#FFF1D6" };
+    const top = people[0].count || 1;
+
+    return {
+      meCount: s.me,
+      totalCount: s.total,
+      totalPct: Math.min(100, Math.round((s.total / goal) * 100)) + "%",
+      sessionLabel: (this.props.sessionName || "CABO DAY 3").toUpperCase() + " · LIVE",
+      syncLabel: s.queued + " QUEUED",
+      rankLabel: "#" + (people.findIndex(p => p.name === "YOU") + 1) + " ON THE BOARD",
+      onTap: this.fire,
+      setMine: () => this.setState({ mode: "ME" }),
+      setShared: () => this.setState({ mode: "SHARED" }),
+      mineStyle: pill(s.mode === "ME", "#FFD400"),
+      sharedStyle: pill(s.mode === "SHARED", "#00E0CC"),
+      fxRocket: s.fx === "rocket",
+      fxClash: s.fx === "clash",
+      fxFlash: !!s.fx,
+      fxWord: !!s.fx,
+      fxWordText: WORDS[s.fx] || "",
+      particles: s.particles,
+      board: people.map((p, i) => ({
+        ...p,
+        rank: i + 1,
+        pct: Math.round((p.count / top) * 100) + "%",
+        wrap: `background:${p.name === "YOU" ? "#FFF1D6" : "rgba(255,241,214,.82)"}; border:5px solid #10312B; border-radius:22px; padding:12px 14px; box-shadow:${p.name === "YOU" ? "0 7px 0 #10312B" : "0 4px 0 rgba(16,49,43,.5)"};`
+      })),
+
+      draftName: this.props.sessionName || "Cabo Day 3",
+      itemChips: ALL_ITEMS.map(label => {
+        const on = s.items.includes(label);
+        return {
+          label,
+          toggle: () => this.setState(st => ({ items: on ? st.items.filter(i => i !== label) : [...st.items, label] })),
+          style: `cursor:pointer; font-family:Anton,sans-serif; font-size:16px; letter-spacing:.02em; padding:9px 15px; border-radius:99px; border:4px solid #10312B; color:#10312B; background:${on ? "#FF7A18" : "#FFFFFF"}; box-shadow:${on ? "0 5px 0 #10312B" : "none"}; transform:translateY(${on ? "0" : "5px"}); opacity:${on ? 1 : .6};`
+        };
+      }),
+      inviteLine: s.inviteAll ? "ALL 6 MEMBERS OF CABO CREW" : "PICK MEMBERS MANUALLY",
+      toggleAll: () => this.setState(st => ({ inviteAll: !st.inviteAll })),
+      switchStyle: `width:62px; height:34px; border-radius:99px; border:4px solid #FFF1D6; background:${s.inviteAll ? "#FFD400" : "#0A2019"}; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:${s.inviteAll ? "flex-end" : "flex-start"};`,
+      knobStyle: `width:22px; height:22px; margin:0 3px; border-radius:50%; background:#FFF1D6; border:2px solid #10312B;`,
+
+      roster: base.map(p => ({
+        ...p,
+        inc: () => this.bump(p.name, 1),
+        dec: () => this.bump(p.name, -1),
+        wrap: `display:flex; align-items:center; gap:9px; background:${p.name === "THE GROUP" ? "#00E0CC" : "#FFF1D6"}; border:4px solid #10312B; border-radius:18px; padding:8px 11px;`
+      })),
+      logGroup: () => this.bump("THE GROUP", 1),
+      closeNow: () => this.setState(st => ({ closed: !st.closed })),
+      closeLabel: s.closed ? "REOPEN 15 MIN" : "END SESSION",
+
+      crewCount: s.crewPicked.length,
+      crew: [
+        { name: "DAVE", handle: "dave@cabo.co", color: "#FFD400", initial: "D" },
+        { name: "MARISOL", handle: "mari@cabo.co", color: "#FF2D6F", initial: "M" },
+        { name: "SAM", handle: "sam@cabo.co", color: "#FF7A18", initial: "S" },
+        { name: "JO", handle: "jo@cabo.co", color: "#FFF1D6", initial: "J" },
+        { name: "TIA R.", handle: "tia@cabo.co · INVITED", color: "#00E0CC", initial: "T" }
+      ].map(m => {
+        const on = s.crewPicked.includes(m.name);
+        return {
+          ...m,
+          toggle: () => this.setState(st => ({ crewPicked: on ? st.crewPicked.filter(n => n !== m.name) : [...st.crewPicked, m.name] })),
+          mark: on ? "✓" : "",
+          wrap: `display:flex; align-items:center; gap:9px; width:100%; cursor:pointer; text-align:left; background:${on ? "#FFF1D6" : "rgba(255,241,214,.5)"}; border:4px solid #10312B; border-radius:18px; padding:8px 11px; box-shadow:${on ? "0 5px 0 #10312B" : "none"}; transform:translateY(${on ? "0" : "5px"});`,
+          check: `width:28px; height:28px; border-radius:8px; border:3px solid #10312B; background:${on ? "#FFD400" : "transparent"}; font-family:Anton,sans-serif; font-size:16px; color:#10312B; display:flex; align-items:center; justify-content:center;`
+        };
+      }),
+
+      statUsers: Object.keys(s.roles).length + 2,
+      statAdmins: Object.values(s.roles).filter(r => r === "ADMIN").length + 1,
+      platform: [
+        { name: "PETE", groups: "4 GROUPS · OWNER", color: "#FFD400", initial: "P", fixed: "SUPER" },
+        { name: "DAVE", groups: "CABO CREW · SKI TRIP", color: "#FFD400", initial: "D" },
+        { name: "MARISOL", groups: "CABO CREW", color: "#FF2D6F", initial: "M" },
+        { name: "SAM", groups: "CABO CREW · TACO TUES", color: "#FF7A18", initial: "S" },
+        { name: "JO", groups: "NO GROUPS YET", color: "#FFF1D6", initial: "J" },
+        { name: "TIA R.", groups: "INVITE SENT 3D AGO", color: "#00E0CC", initial: "T" }
+      ].map(u => {
+        const role = u.fixed || s.roles[u.name] || "MEMBER";
+        const next = { MEMBER: "ADMIN", ADMIN: "MEMBER", INVITED: "MEMBER" };
+        const bg = { SUPER: "#FFD400", ADMIN: "#00E0CC", MEMBER: "#FFF1D6", INVITED: "#FF7A18" }[role];
+        return {
+          ...u,
+          role,
+          cycle: u.fixed ? () => {} : () => this.setState(st => ({ roles: { ...st.roles, [u.name]: next[role] } })),
+          wrap: `display:flex; align-items:center; gap:9px; width:100%; cursor:${u.fixed ? "default" : "pointer"}; background:#FFF1D6; border:4px solid ${role === "SUPER" ? "#FFD400" : "#10312B"}; border-radius:18px; padding:8px 11px;`,
+          badge: `font-family:Anton,sans-serif; font-size:12px; letter-spacing:.04em; color:#10312B; background:${bg}; border:3px solid #10312B; border-radius:99px; padding:3px 9px; white-space:nowrap;`
+        };
+      }),
+
+      audit: s.audit.slice(0, 8).map(e => ({
+        ...e,
+        wrap: "display:flex; align-items:flex-start; gap:10px; background:#FFF1D6; border:4px solid #10312B; border-radius:16px; padding:9px 11px;",
+        tagStyle: `font-family:Anton,sans-serif; font-size:11px; letter-spacing:.06em; color:#10312B; background:${tagColor[e.tag] || "#FFF1D6"}; border:3px solid #10312B; border-radius:99px; padding:3px 8px; white-space:nowrap;`
+      }))
+    };
+  }
+}
+
+</script>
+</body>
+</html>
