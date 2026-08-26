@@ -33,6 +33,7 @@ export function Interactive() {
         </Label>
         <div className="flex flex-col gap-4">
           <TextField label="Session name" defaultValue="Cabo Day 3" />
+          <TextField label="Email (plain face)" defaultValue="tia@cabo.co" face="plain" />
           <SelectField label="Role" defaultValue="admin" hint="Owners cannot change their own role">
             <option value="owner">Super Admin</option>
             <option value="admin">Admin</option>
@@ -50,7 +51,7 @@ export function Interactive() {
         </div>
         {modal && (
           <Modal title="Invite a user" onClose={() => setModal(false)}>
-            <TextField label="Email" placeholder="name@gmail.com" type="email" />
+            <TextField label="Email" placeholder="name@gmail.com" type="email" face="plain" />
             <div className="flex justify-end gap-3">
               <Button tone="secondary" size="sm" onClick={() => setModal(false)}>
                 Cancel

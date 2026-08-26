@@ -24,15 +24,35 @@ export interface ModalProps {
  */
 export function Modal({ title, onClose, className, children }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  /**
+   * True while *we* are closing the dialog, so the `close` event that
+   * `dialog.close()` synchronously dispatches doesn't come back as a second
+   * onClose.
+   *
+   * Without this the modal shuts itself the instant it opens: React
+   * StrictMode double-invokes effects in dev, the simulated unmount runs the
+   * cleanup, `close()` fires `close`, and the parent flips its state to
+   * false before anyone has seen the dialog. It also covers the ordinary
+   * path — backdrop click calls onClose, the parent unmounts us, and the
+   * cleanup would otherwise fire onClose again on the way out.
+   */
+  const selfClosing = useRef(false);
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    // showModal() throws if the dialog is already open — StrictMode's
-    // double-invoked effects in dev make that reachable.
+    // showModal() throws if the dialog is already open.
     if (!dialog.open) dialog.showModal();
-    return () => dialog.close();
+    return () => {
+      selfClosing.current = true;
+      dialog.close();
+    };
   }, []);
+
+  function requestClose() {
+    if (selfClosing.current) return;
+    onClose();
+  }
 
   return (
     <dialog
@@ -41,12 +61,12 @@ export function Modal({ title, onClose, className, children }: ModalProps) {
       // parent ever learning the modal is gone.
       onCancel={(e) => {
         e.preventDefault();
-        onClose();
+        requestClose();
       }}
-      onClose={onClose}
+      onClose={requestClose}
       // Clicking the backdrop hits the <dialog> itself, never its children.
       onClick={(e) => {
-        if (e.target === ref.current) onClose();
+        if (e.target === ref.current) requestClose();
       }}
       className={cn(
         "bg-transparent p-0 backdrop:bg-ink/60",
