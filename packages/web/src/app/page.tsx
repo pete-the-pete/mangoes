@@ -1,13 +1,34 @@
-export default function Home() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 bg-gradient-to-b from-orange-400 via-rose-400 to-teal-600 px-6 text-center">
-      <span className="text-[9rem] leading-none drop-shadow-lg sm:text-[13rem]" role="img" aria-label="mango">
-        🥭
-      </span>
-      <h1 className="text-2xl font-semibold tracking-tight text-white drop-shadow sm:text-3xl">
-        Mango Tracker
-      </h1>
-      <p className="text-lg font-medium text-white/90">Coming soon</p>
-    </div>
-  );
+import { redirect } from "next/navigation";
+import { getCurrentUserRole } from "@/lib/auth";
+import { currentCycleStore, cycleStore, itemTypeStore } from "@/lib/db";
+import { splitSessionListItems } from "@/lib/memberSessions";
+import { Splash } from "./Splash";
+import { SessionChooser } from "./SessionChooser";
+
+// Deliberately outside the (member) route group so this stays reachable
+// signed out (see Splash). `getCurrentUserRole`, not the bare `auth()` the
+// brief's snippet showed: this is the most likely post-sign-in landing page,
+// and getCurrentUserRole carries the joinPendingCohort side effect a
+// freshly-invited member needs before listCyclesForParticipant can find
+// their cohort — using bare auth() here would show them the empty-state
+// copy on their very first visit, which is exactly what this milestone
+// exists to fix.
+export default async function Home() {
+  const current = await getCurrentUserRole();
+  if (!current) {
+    return <Splash />;
+  }
+
+  const currentSession = await currentCycleStore.getCurrentCycle(current.clerkUserId);
+  if (currentSession) {
+    redirect(`/sessions/${currentSession.id}`);
+  }
+
+  // No valid pointer — stale, cleared, or never set. Not an error, never a toast.
+  const [cycles, catalog] = await Promise.all([
+    cycleStore.listCyclesForParticipant(current.clerkUserId),
+    itemTypeStore.listItemTypes(),
+  ]);
+  const emojiByKey = new Map(catalog.map((t) => [t.key, t.emoji]));
+  return <SessionChooser {...splitSessionListItems(cycles, emojiByKey)} />;
 }
