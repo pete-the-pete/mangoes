@@ -34,7 +34,13 @@ export async function getCurrentUserRole(
 
   const publicMetadata = (user.publicMetadata ?? {}) as Record<string, unknown>;
 
-  await joinPendingCohort({ clerkUserId: userId, publicMetadata });
+  // Chained, not two independent writes off one snapshot: publicMetadata is
+  // replaced wholesale on every update, so the second consumer has to start
+  // from what the first actually left behind.
+  const remaining = await joinPendingCohort({
+    clerkUserId: userId,
+    publicMetadata,
+  });
 
   // Same pass, same reason as the group half above: this is the only request
   // guaranteed to run for every user, so it is where an invitation's name gets
@@ -44,7 +50,7 @@ export async function getCurrentUserRole(
     clerkUserId: userId,
     firstName: user.firstName,
     lastName: user.lastName,
-    publicMetadata,
+    publicMetadata: remaining,
   });
 
   return { clerkUserId: userId, role };

@@ -8,7 +8,12 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 // Importing auth.ts pulls in @/lib/db, which would otherwise construct a real pg Pool.
 vi.mock("@/lib/db", () => ({ userRoleStore: undefined }));
-vi.mock("@/lib/pendingCohortInvite", () => ({ joinPendingCohort: vi.fn() }));
+// Passes the metadata straight through, standing in for the real helper's
+// "here is what is left pending after my clear" contract — getCurrentUserRole
+// feeds that return value to applyPendingInviteName.
+vi.mock("@/lib/pendingCohortInvite", () => ({
+  joinPendingCohort: vi.fn(async (input: { publicMetadata: unknown }) => input.publicMetadata),
+}));
 vi.mock("@/lib/pendingInviteName", () => ({ applyPendingInviteName: vi.fn() }));
 
 import { auth, clerkClient } from "@clerk/nextjs/server";

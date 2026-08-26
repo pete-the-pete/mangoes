@@ -17,7 +17,7 @@ beforeEach(() => {
 
 describe("joinPendingCohort", () => {
   it("joins the cohort and clears the metadata", async () => {
-    await joinPendingCohort({
+    const remaining = await joinPendingCohort({
       clerkUserId: "u2",
       publicMetadata: { intendedRole: "member", intendedCohortId: "c1" },
     });
@@ -26,19 +26,23 @@ describe("joinPendingCohort", () => {
     expect(clerkMock.users.updateUser).toHaveBeenCalledWith("u2", {
       publicMetadata: { intendedRole: "member", intendedCohortId: null },
     });
+    // Handed back so the next consumer writes from post-clear state — a
+    // publicMetadata update replaces the object, it does not merge.
+    expect(remaining).toEqual({ intendedRole: "member", intendedCohortId: null });
   });
 
   // The whole reason clearing is mandatory: getCurrentUserRole runs on every
   // request, so an uncleared invitation would silently re-add a member an admin
   // had just removed.
   it("does nothing when the metadata carries no cohort id", async () => {
-    await joinPendingCohort({
+    const remaining = await joinPendingCohort({
       clerkUserId: "u2",
       publicMetadata: { intendedRole: "member" },
     });
 
     expect(cohortStore.addMember).not.toHaveBeenCalled();
     expect(clerkMock.users.updateUser).not.toHaveBeenCalled();
+    expect(remaining).toEqual({ intendedRole: "member" });
   });
 
   it("ignores a non-string cohort id", async () => {
@@ -53,12 +57,15 @@ describe("joinPendingCohort", () => {
   // where the reverse order would drop the membership entirely.
   it("swallows a failure to clear so sign-in still succeeds", async () => {
     clerkMock.users.updateUser.mockRejectedValue(new Error("clerk down"));
+
+    // Reports the pre-clear metadata, because that is what is still remote:
+    // telling the next consumer otherwise would drop the cohort id for good.
     await expect(
       joinPendingCohort({
         clerkUserId: "u2",
         publicMetadata: { intendedCohortId: "c1" },
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ intendedCohortId: "c1" });
     expect(cohortStore.addMember).toHaveBeenCalled();
   });
 });

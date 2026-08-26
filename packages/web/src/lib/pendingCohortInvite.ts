@@ -14,25 +14,34 @@ export interface PendingCohortInviteInput {
  * authenticated request via getCurrentUserRole, so an invitation left in place
  * would re-add a member the moment after an admin removed them. resolveRole
  * gets idempotence for free ("an existing row wins"); this does not.
+ *
+ * Returns the metadata as it now stands remotely, which the caller must hand to
+ * the next consumer. `updateUser({ publicMetadata })` replaces the whole object
+ * rather than merging, so a second consumer writing from the pre-clear snapshot
+ * would put `intendedCohortId` straight back and re-add the member forever.
  */
 export async function joinPendingCohort(
   input: PendingCohortInviteInput,
   store: CohortStore = cohortStore,
-): Promise<void> {
+): Promise<Record<string, unknown>> {
   const cohortId = input.publicMetadata["intendedCohortId"];
   if (typeof cohortId !== "string" || cohortId.length === 0) {
-    return;
+    return input.publicMetadata;
   }
 
   await store.addMember(cohortId, input.clerkUserId, "member");
 
+  const cleared = { ...input.publicMetadata, intendedCohortId: null };
   try {
     const clerk = await clerkClient();
     await clerk.users.updateUser(input.clerkUserId, {
-      publicMetadata: { ...input.publicMetadata, intendedCohortId: null },
+      publicMetadata: cleared,
     });
+    return cleared;
   } catch {
     // Membership already landed. A failed clear costs one redundant re-add on
     // the next request; failing the whole sign-in over it costs the user access.
+    // The pre-clear snapshot is what's still remote, so that is what's returned.
+    return input.publicMetadata;
   }
 }
