@@ -44,3 +44,72 @@ export function splitByStatus(cycles: CycleDetail[], now: Date = new Date()): Sp
   }
   return { live, scheduled, recent };
 }
+
+const WINDOW_FMT = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+/** UTC, deliberately: a session window is shared, and formatting on the
+ *  server in the viewer's local zone would also be a hydration mismatch
+ *  waiting to happen the moment this is reused from a client component. */
+export function formatSessionWindow(startsAt: Date, endsAt: Date): string {
+  return `${WINDOW_FMT.format(startsAt)} – ${WINDOW_FMT.format(endsAt)}`;
+}
+
+/**
+ * A session view model for the chooser / browsable list / group roster —
+ * distinct from `MemberSessionJson` (the wire shape `/api/sessions` and
+ * `/api/current-session` already return) because those screens need a
+ * formatted window and the session's item emoji, not raw keys and ISO dates.
+ */
+export interface SessionListItem {
+  id: string;
+  name: string;
+  status: CycleStatus;
+  isOverdue: boolean;
+  window: string;
+  itemEmoji: string[];
+}
+
+export function toSessionListItem(
+  cycle: CycleDetail,
+  emojiByKey: Map<string, string>,
+  now: Date = new Date(),
+): SessionListItem {
+  return {
+    id: cycle.id,
+    name: cycle.name,
+    status: deriveCycleStatus(cycle, now),
+    isOverdue: isCycleOverdue(cycle, now),
+    window: formatSessionWindow(cycle.startsAt, cycle.endsAt),
+    itemEmoji: cycle.itemTypeKeys.map((key) => emojiByKey.get(key) ?? "•"),
+  };
+}
+
+export interface SplitSessionListResult {
+  live: SessionListItem[];
+  scheduled: SessionListItem[];
+  recent: SessionListItem[];
+}
+
+/** Same three groupings as `splitByStatus`, over the display view model. */
+export function splitSessionListItems(
+  cycles: CycleDetail[],
+  emojiByKey: Map<string, string>,
+  now: Date = new Date(),
+): SplitSessionListResult {
+  const live: SessionListItem[] = [];
+  const scheduled: SessionListItem[] = [];
+  const recent: SessionListItem[] = [];
+  for (const cycle of cycles) {
+    const item = toSessionListItem(cycle, emojiByKey, now);
+    if (item.status === "live") live.push(item);
+    else if (item.status === "scheduled") scheduled.push(item);
+    else recent.push(item);
+  }
+  return { live, scheduled, recent };
+}
