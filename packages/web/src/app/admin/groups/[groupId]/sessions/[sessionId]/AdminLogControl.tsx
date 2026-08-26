@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { SelectField } from "@/components/ui/Field";
+import { Label } from "@/components/ui/Label";
+import { Pill } from "@/components/ui/Pill";
+import { cn } from "@/components/ui/cn";
 
 export interface ItemTypeOption {
   key: string;
@@ -155,101 +161,133 @@ export function AdminLogControl(props: AdminLogControlProps) {
   const logEntries = props.entries.filter((e) => e.kind === "log");
 
   return (
-    <div className="mt-8 flex flex-col gap-4 border-t border-gray-200 pt-6">
-      <h2 className="text-sm font-medium">Log on behalf</h2>
+    <section className="border-ink mt-8 flex flex-col gap-4 border-t-4 border-solid pt-6">
+      <h2 className="font-display text-30">Log for anyone</h2>
+
       <form onSubmit={submitLog} className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm">
-          Item
-          <select
-            value={itemTypeKey}
-            onChange={(e) => setItemTypeKey(e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1"
-          >
-            {props.itemTypes.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.emoji} {t.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          For
-          <select
-            value={subjectChoice}
-            onChange={(e) => setSubjectChoice(e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1"
-          >
-            <option value={GROUP_OPTION}>For the group (nobody in particular)</option>
-            {props.participants.map((p) => (
-              <option key={p.clerkUserId} value={p.clerkUserId}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="submit"
-          disabled={isSubmitting || props.itemTypes.length === 0}
-          className="rounded bg-black px-3 py-1.5 text-sm text-white disabled:opacity-50"
+        <SelectField
+          label="Item"
+          className="min-w-[10rem] flex-1"
+          value={itemTypeKey}
+          onChange={(e) => setItemTypeKey(e.target.value)}
         >
-          Log
-        </button>
+          {props.itemTypes.map((t) => (
+            <option key={t.key} value={t.key}>
+              {t.emoji} {t.label}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField
+          label="For"
+          className="min-w-[12rem] flex-1"
+          value={subjectChoice}
+          onChange={(e) => setSubjectChoice(e.target.value)}
+        >
+          <option value={GROUP_OPTION}>For the group (nobody in particular)</option>
+          {props.participants.map((p) => (
+            <option key={p.clerkUserId} value={p.clerkUserId}>
+              {p.name}
+            </option>
+          ))}
+        </SelectField>
+        <Button type="submit" tone="accent" disabled={isSubmitting || props.itemTypes.length === 0}>
+          Log it
+        </Button>
       </form>
 
       {error && (
-        <p role="alert" className="text-sm text-red-600">
-          {error}
-        </p>
+        <Card tone="pink" border={4} radius={16} lift="xs" className="px-3 py-2.5">
+          <p role="alert" className="text-12 text-cream leading-snug">
+            {error}
+          </p>
+        </Card>
       )}
 
-      <div className="flex flex-col gap-1 text-sm">
-        <h3 className="text-xs font-medium text-gray-500">Recent entries</h3>
+      <div className="flex flex-col gap-2.5">
+        <Label size={10} as="h3" className="text-rust">
+          Audit log · every edit is on the record
+        </Label>
 
         {logEntries.length === 0 && pending.length === 0 && (
-          <p className="text-gray-500">No entries yet.</p>
+          <Label size={11} as="p" className="text-rust">
+            No entries yet.
+          </Label>
         )}
 
         {pending.map((p) => (
-          <div key={p.tempId} className="flex items-center justify-between gap-2 py-1 text-gray-400">
-            <span>
-              {p.subjectUserId ? nameFor(props.nameByClerkUserId, p.subjectUserId) : "group"} —{" "}
+          <Card
+            key={p.tempId}
+            tone="cream"
+            border={4}
+            radius={16}
+            lift="none"
+            className="sticker-off flex items-center justify-between gap-3 p-2.5"
+          >
+            <span className="text-12 min-w-0 truncate font-medium">
+              {p.subjectUserId ? nameFor(props.nameByClerkUserId, p.subjectUserId) : "the group"} —{" "}
               {props.itemTypes.find((t) => t.key === p.itemTypeKey)?.emoji} {p.itemTypeKey}
             </span>
-            <span>saving…</span>
-          </div>
+            <Pill tone="yellow" className="shrink-0">
+              Saving
+            </Pill>
+          </Card>
         ))}
 
         {logEntries.map((entry) => {
           const isVoided = voidedIds.has(entry.id) || voidingIds.has(entry.id);
           const itemType = props.itemTypes.find((t) => t.key === entry.itemTypeKey);
+          const onBehalf = entry.subjectUserId !== entry.actorUserId;
           return (
-            <div
+            <Card
               key={entry.id}
-              className={`flex items-center justify-between gap-2 border-b border-gray-100 py-1 ${
-                isVoided ? "text-gray-400 line-through" : ""
-              }`}
+              tone="cream"
+              border={4}
+              radius={16}
+              lift={isVoided ? "none" : "xs"}
+              className={cn(
+                "flex flex-wrap items-center justify-between gap-3 p-2.5",
+                isVoided && "sticker-off",
+              )}
             >
-              <span>
-                {nameFor(props.nameByClerkUserId, entry.actorUserId)} logged{" "}
-                {itemType ? `${itemType.emoji} ${itemType.label}` : entry.itemTypeKey} for{" "}
-                {entry.subjectUserId ? nameFor(props.nameByClerkUserId, entry.subjectUserId) : "group"}
+              <span className="flex min-w-0 items-center gap-2.5">
+                {/* Screen 6's fixed rust time column, so descriptions line up. */}
+                <Label
+                  size={9}
+                  as="time"
+                  dateTime={entry.occurredAt}
+                  className="text-rust shrink-0 tabular-nums"
+                >
+                  {formatUtc(entry.occurredAt)}
+                </Label>
+                <span className={cn("text-12 min-w-0 truncate font-medium", isVoided && "line-through")}>
+                  {nameFor(props.nameByClerkUserId, entry.actorUserId)} logged{" "}
+                  {itemType ? `${itemType.emoji} ${itemType.label}` : entry.itemTypeKey} for{" "}
+                  {entry.subjectUserId
+                    ? nameFor(props.nameByClerkUserId, entry.subjectUserId)
+                    : "the group"}
+                </span>
               </span>
-              <span className="flex items-center gap-2 text-xs text-gray-500">
-                {formatUtc(entry.occurredAt)}
+              <span className="flex shrink-0 items-center gap-2">
+                {/* The design's tag badges: yellow for an on-behalf log,
+                    turquoise for an untagged group one, pink for a removal. */}
+                <Pill tone={isVoided ? "pink" : entry.subjectUserId ? "yellow" : "turquoise"}>
+                  {isVoided ? "Edit" : entry.subjectUserId ? (onBehalf ? "On behalf" : "Self") : "Group"}
+                </Pill>
                 {!isVoided && (
-                  <button
-                    type="button"
+                  <Button
+                    tone="destructive"
+                    size="sm"
                     onClick={() => voidEntry(entry.id)}
-                    className="text-red-600 hover:underline"
+                    aria-label={`Remove the entry logged at ${formatUtc(entry.occurredAt)}`}
                   >
                     Remove
-                  </button>
+                  </Button>
                 )}
               </span>
-            </div>
+            </Card>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }

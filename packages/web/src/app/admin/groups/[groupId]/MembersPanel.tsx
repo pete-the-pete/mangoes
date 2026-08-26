@@ -4,6 +4,13 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { GroupMemberView, PendingInviteView } from "@/lib/adminGroups";
 import { isGmailAddress } from "@/lib/email";
+import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { TextField } from "@/components/ui/Field";
+import { Label } from "@/components/ui/Label";
+import { Pill } from "@/components/ui/Pill";
+import { cn } from "@/components/ui/cn";
 
 type CohortRole = GroupMemberView["role"];
 
@@ -114,48 +121,53 @@ export function MembersPanel({
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-semibold">Members</h2>
+      <h2 className="font-display text-30">Members</h2>
 
       {error && (
-        <p role="alert" className="text-sm text-red-600">
-          {error}
-        </p>
+        <Card tone="pink" border={4} radius={16} lift="xs" className="px-3 py-2.5">
+          <p role="alert" className="text-12 text-cream leading-snug">
+            {error}
+          </p>
+        </Card>
       )}
       {notice && (
-        <p role="alert" className="text-sm text-teal-700">
-          {notice}
-        </p>
+        <Card tone="turquoise" border={4} radius={16} lift="xs" className="px-3 py-2.5">
+          <p role="alert" className="text-12 text-ink leading-snug">
+            {notice}
+          </p>
+        </Card>
       )}
 
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="border-b text-gray-500">
-            <th className="py-2 font-medium">Name</th>
-            <th className="font-medium">Email</th>
-            <th className="font-medium">Role</th>
-            {canManage && <th className="font-medium" />}
-          </tr>
-        </thead>
-        <tbody>
-          {initialMembers.map((member) => {
-            const isSelf = member.clerkUserId === currentUserId;
-            return (
-              <tr key={member.clerkUserId} className="border-b">
-                <td className="py-2">
-                  <span className="flex items-center gap-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={member.avatarUrl ?? undefined}
-                      alt=""
-                      width={32}
-                      height={32}
-                      className="h-8 w-8 rounded-full bg-gray-100"
-                    />
-                    {member.name ?? "—"}
+      <ul className="flex flex-col gap-2.5">
+        {initialMembers.map((member) => {
+          const isSelf = member.clerkUserId === currentUserId;
+          return (
+            <li key={member.clerkUserId}>
+              <Card
+                tone="cream"
+                border={4}
+                radius={18}
+                lift="xs"
+                className="flex flex-wrap items-center justify-between gap-3 p-2.5"
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <Avatar
+                    src={member.avatarUrl ?? null}
+                    name={member.name ?? member.email ?? "?"}
+                    size={34}
+                  />
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="font-display text-19 min-w-0 truncate">
+                      {member.name ?? "—"}
+                    </span>
+                    {/* Body copy: an email in Anton renders uppercase. */}
+                    <span className="text-11 text-rust min-w-0 truncate font-medium">
+                      {member.email ?? "—"}
+                    </span>
                   </span>
-                </td>
-                <td>{member.email ?? "—"}</td>
-                <td>
+                </span>
+
+                <span className="flex shrink-0 items-center gap-2">
                   {canManage ? (
                     <select
                       value={member.role}
@@ -164,81 +176,82 @@ export function MembersPanel({
                       disabled={isSelf}
                       title={isSelf ? "You cannot change your own role" : undefined}
                       aria-label={`Group role for ${member.email ?? member.clerkUserId}`}
-                      onChange={(e) =>
-                        changeRole(member.clerkUserId, e.target.value as CohortRole)
-                      }
-                      className="rounded border px-2 py-1 disabled:opacity-50"
+                      onChange={(e) => changeRole(member.clerkUserId, e.target.value as CohortRole)}
+                      className={cn(
+                        "font-display border-ink rounded-99 min-h-11 cursor-pointer border-3 border-solid px-3 text-14 uppercase",
+                        "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink",
+                        "disabled:cursor-not-allowed disabled:opacity-100",
+                        member.role === "admin" ? "bg-turquoise text-ink" : "bg-cream text-ink",
+                      )}
                     >
                       <option value="admin">Group admin</option>
                       <option value="member">Member</option>
                     </select>
                   ) : (
-                    <span className="rounded-full border px-2 py-0.5 text-xs">
+                    <Pill tone={member.role === "admin" ? "turquoise" : "cream"}>
                       {ROLE_LABELS[member.role]}
-                    </span>
+                    </Pill>
                   )}
-                </td>
-                {canManage && (
-                  <td className="text-right">
-                    {/* Left enabled for yourself: leaving a group is allowed,
-                        and the API's 409 is what refuses the last admin. */}
-                    <button
-                      type="button"
+
+                  {canManage && (
+                    // Left enabled for yourself: leaving a group is allowed,
+                    // and the API's 409 is what refuses the last admin.
+                    <Button
+                      tone="destructive"
+                      size="sm"
                       onClick={() => removeMember(member.clerkUserId)}
-                      className="text-sm text-red-600 hover:underline"
+                      aria-label={`${isSelf ? "Leave this group" : `Remove ${member.email ?? member.clerkUserId}`}`}
                     >
                       {isSelf ? "Leave" : "Remove"}
-                    </button>
-                  </td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                    </Button>
+                  )}
+                </span>
+              </Card>
+            </li>
+          );
+        })}
+      </ul>
 
       {initialInvites.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium text-gray-500">Pending invitations</h3>
-          <ul className="flex flex-col gap-1 text-sm">
+        <Card tone="cream" border={5} radius={18} lift="xs" className="flex flex-col gap-2 p-3">
+          <Label size={10} as="h3" className="text-rust">
+            ✉️ {initialInvites.length} {initialInvites.length === 1 ? "invite" : "invites"} pending
+          </Label>
+          <ul className="flex flex-col gap-1.5">
             {initialInvites.map((invite) => (
-              <li key={invite.id} className="flex items-center justify-between border-b py-1">
-                <span>{invite.email}</span>
+              <li key={invite.id} className="flex items-center justify-between gap-3">
+                <span className="text-12 min-w-0 truncate font-medium">{invite.email}</span>
                 {canManage && (
-                  <button
-                    type="button"
+                  <Button
+                    tone="destructive"
+                    size="sm"
                     onClick={() => revokeInvite(invite.id)}
-                    className="text-red-600 hover:underline"
+                    aria-label={`Revoke the invitation for ${invite.email}`}
                   >
                     Revoke
-                  </button>
+                  </Button>
                 )}
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       )}
 
       {canManage && (
-        <form onSubmit={addMember} className="flex items-end gap-2">
-          <label className="flex flex-1 flex-col gap-1 text-sm">
-            Add by email
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              type="email"
-              required
-              placeholder="friend@gmail.com"
-              className="rounded border border-gray-300 px-2 py-1"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded bg-black px-3 py-1.5 text-sm text-white disabled:opacity-50"
-          >
+        <form onSubmit={addMember} className="flex flex-wrap items-end gap-3">
+          <TextField
+            label="Add by email"
+            face="plain"
+            className="min-w-[14rem] flex-1"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            type="email"
+            required
+            placeholder="friend@gmail.com"
+          />
+          <Button type="submit" disabled={isSubmitting}>
             Add
-          </button>
+          </Button>
         </form>
       )}
     </section>

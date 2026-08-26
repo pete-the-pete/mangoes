@@ -3,6 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { EmojiPicker } from "./EmojiPicker";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { TextField } from "@/components/ui/Field";
+import { Label } from "@/components/ui/Label";
+import { cn } from "@/components/ui/cn";
 
 export interface ItemTypeOption {
   key: string;
@@ -32,6 +37,13 @@ export interface SessionFormProps {
   };
   defaultItemTypeKey: string;
 }
+
+/** Shared by the two datetime-local inputs, which sit on colored cards rather
+ *  than the white field surface the rest of the form uses. */
+const DATE_INPUT =
+  "font-display text-ink bg-cream border-ink rounded-16 min-h-11 w-full border-3 border-solid px-2.5 text-17 " +
+  "outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink " +
+  "disabled:cursor-not-allowed disabled:opacity-60";
 
 export function SessionForm(props: SessionFormProps) {
   const router = useRouter();
@@ -112,49 +124,59 @@ export function SessionForm(props: SessionFormProps) {
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
+    <form onSubmit={submit} className="flex flex-col gap-5">
       {props.session?.isOverdue && (
-        <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          This session passed its end time and is still open. Close it when the
-          group is done logging.
-        </p>
+        <Card tone="yellow" border={4} radius={16} lift="xs" className="px-3 py-2.5">
+          <p className="text-12 text-ink leading-snug">
+            This session passed its end time and is still open. Close it when the group is done
+            logging.
+          </p>
+        </Card>
       )}
 
-      <label className="flex flex-col gap-1 text-sm">
-        Name
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          maxLength={80}
-          disabled={!props.canManage}
-          className="rounded border border-gray-300 px-2 py-1"
-        />
-      </label>
+      <TextField
+        label="Session name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        required
+        maxLength={80}
+        disabled={!props.canManage}
+      />
 
-      <div className="flex gap-4">
-        <label className="flex flex-1 flex-col gap-1 text-sm">
-          Starts (UTC)
+      {/* Screen 4's time box: two side-by-side cards, turquoise for the start
+          and hot pink for the end. */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card tone="turquoise" border={5} radius={20} lift="md" className="flex flex-col gap-1.5 p-3">
+          <Label size={10} as="label" htmlFor="session-starts" className="text-ink/70">
+            Starts (UTC)
+          </Label>
           <input
+            id="session-starts"
             type="datetime-local"
             value={startsAt}
             onChange={(e) => setStartsAt(e.target.value)}
             required
             disabled={!props.canManage}
-            className="rounded border border-gray-300 px-2 py-1"
+            className={DATE_INPUT}
           />
-        </label>
-        <label className="flex flex-1 flex-col gap-1 text-sm">
-          Ends (UTC)
+        </Card>
+        <Card tone="pink" border={5} radius={20} lift="md" className="flex flex-col gap-1.5 p-3">
+          <Label size={10} as="label" htmlFor="session-ends" className="text-cream/80">
+            Ends (UTC)
+          </Label>
           <input
+            id="session-ends"
             type="datetime-local"
             value={endsAt}
             onChange={(e) => setEndsAt(e.target.value)}
             required
             disabled={!props.canManage}
-            className="rounded border border-gray-300 px-2 py-1"
+            // Not text-cream: the input keeps its own cream fill on both
+            // cards, so cream text here would be invisible. Only the label
+            // above changes color to sit on the pink card.
+            className={DATE_INPUT}
           />
-        </label>
+        </Card>
       </div>
 
       <EmojiPicker
@@ -164,55 +186,68 @@ export function SessionForm(props: SessionFormProps) {
         onChange={setItemTypeKeys}
       />
 
-      <fieldset className="flex flex-col gap-1 text-sm">
-        <legend className="mb-1">Participants</legend>
-        {props.members.map((member) => (
-          <label key={member.clerkUserId} className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={participantIds.includes(member.clerkUserId)}
-              disabled={!props.canManage}
-              onChange={(e) =>
-                setParticipantIds((ids) =>
-                  e.target.checked
-                    ? [...ids, member.clerkUserId]
-                    : ids.filter((id) => id !== member.clerkUserId),
-                )
-              }
-            />
-            {member.name}
-          </label>
-        ))}
+      <fieldset className="flex flex-col gap-2.5">
+        <legend className="mb-1">
+          <Label size={10} className="text-rust">
+            Who&rsquo;s in the crew
+          </Label>
+        </legend>
+        {props.members.map((member) => {
+          const checked = participantIds.includes(member.clerkUserId);
+          return (
+            // Screen 7's member picker: the whole row is the control, selected
+            // rows solid and raised, unselected pressed down.
+            <label
+              key={member.clerkUserId}
+              className={cn(
+                "border-ink rounded-18 flex cursor-pointer items-center gap-3 border-4 border-solid p-2.5",
+                "transition-[transform,box-shadow,opacity] duration-75 ease-out",
+                "has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-3 has-[:focus-visible]:outline-ink",
+                checked ? "bg-cream shadow-sticker-sm shadow-ink" : "bg-cream sticker-off",
+                !props.canManage && "cursor-not-allowed",
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={!props.canManage}
+                onChange={(e) =>
+                  setParticipantIds((ids) =>
+                    e.target.checked
+                      ? [...ids, member.clerkUserId]
+                      : ids.filter((id) => id !== member.clerkUserId),
+                  )
+                }
+                className="border-ink accent-mango-yellow size-7 shrink-0 cursor-pointer rounded-8 border-3 border-solid"
+              />
+              <span className="font-display text-19 min-w-0 truncate">{member.name}</span>
+            </label>
+          );
+        })}
       </fieldset>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <Card tone="pink" border={4} radius={16} lift="xs" className="px-3 py-2.5">
+          <p role="alert" className="text-12 text-cream leading-snug">
+            {error}
+          </p>
+        </Card>
+      )}
 
       {props.canManage && (
-        <div className="flex items-center gap-2">
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded bg-black px-3 py-1.5 text-sm text-white disabled:opacity-50"
-          >
-            {isEdit ? "Save" : "Create session"}
-          </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit" tone="go" size="lg" disabled={isSubmitting}>
+            {isEdit ? "Save" : "Go live 🚀"}
+          </Button>
           {isEdit && props.session!.status !== "closed" && (
-            <button
-              type="button"
-              onClick={() => setClosed(true)}
-              className="rounded border border-gray-300 px-3 py-1.5 text-sm"
-            >
-              Close session
-            </button>
+            <Button type="button" tone="destructive" onClick={() => setClosed(true)}>
+              End session
+            </Button>
           )}
           {isEdit && props.session!.status === "closed" && (
-            <button
-              type="button"
-              onClick={() => setClosed(false)}
-              className="rounded border border-gray-300 px-3 py-1.5 text-sm"
-            >
+            <Button type="button" tone="accent" onClick={() => setClosed(false)}>
               Reopen session
-            </button>
+            </Button>
           )}
         </div>
       )}

@@ -7,6 +7,7 @@ import { listGroupMembersForAdmin } from "@/lib/adminGroups";
 import { DEFAULT_ITEM_TYPE_KEY } from "@/lib/itemTypeCatalog";
 import { SessionForm } from "../SessionForm";
 import { AdminLogControl, type AdminEntryView } from "./AdminLogControl";
+import { PageShell } from "@/components/ui/PageShell";
 
 /** How many recent ledger entries the session page pulls for the admin log control. */
 const RECENT_ENTRIES_LIMIT = 50;
@@ -105,14 +106,14 @@ export default async function SessionPage({
   }));
 
   return (
-    <div className="mx-auto w-full max-w-3xl p-6">
+    <PageShell width="wide">
       <Link
         href={`/admin/groups/${groupId}`}
-        className="text-sm text-gray-500 hover:underline"
+        className="font-display text-rust self-start text-15 underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink"
       >
         ← Back to the group
       </Link>
-      <h1 className="mt-2 mb-4 text-xl font-semibold">{cycle.name}</h1>
+      <h1 className="font-display text-48">{cycle.name}</h1>
       <SessionForm
         groupId={groupId}
         canManage={canManage}
@@ -139,6 +140,6 @@ export default async function SessionPage({
         nameByClerkUserId={nameByClerkUserId}
         entries={recentEntries}
       />
-    </div>
+    </PageShell>
   );
 }

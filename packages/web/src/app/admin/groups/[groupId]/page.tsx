@@ -5,6 +5,7 @@ import { cohortStore, cycleStore, itemTypeStore } from "@/lib/db";
 import { listGroupMembersForAdmin, listPendingGroupInvites } from "@/lib/adminGroups";
 import { MembersPanel } from "./MembersPanel";
 import { SessionsPanel, type SessionView } from "./SessionsPanel";
+import { PageShell } from "@/components/ui/PageShell";
 
 const WINDOW_FMT = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
@@ -60,8 +61,8 @@ export default async function GroupPage({
   }));
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-6">
-      <h1 className="text-xl font-semibold">{group.name}</h1>
+    <PageShell width="wide" className="gap-8">
+      <h1 className="font-display text-48">{group.name}</h1>
       <MembersPanel
         groupId={groupId}
         initialMembers={members}
@@ -70,6 +71,6 @@ export default async function GroupPage({
         currentUserId={current.clerkUserId}
       />
       <SessionsPanel groupId={groupId} sessions={sessions} canManage={canManage} />
-    </div>
+    </PageShell>
   );
 }
