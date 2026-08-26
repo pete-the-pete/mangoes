@@ -52,12 +52,19 @@ export default async function SessionPage({ params }: PageProps) {
     .filter((t): t is NonNullable<typeof t> => t !== undefined)
     .map((t) => ({ key: t.key, emoji: t.emoji, label: t.label }));
 
+  // requireCycleParticipant grants access to the platform owner even when
+  // they aren't a participant (its superuser escape hatch, for the API).
+  // That's for looking, not logging: a tap from someone not in
+  // participantIds would credit a subject with no leaderboard row.
+  const isParticipant = cycle.participantIds.includes(me);
+
   return (
     <SessionScreen
       session={toMemberSessionJson(cycle)}
       itemTypes={itemTypes}
       participants={participants}
       me={me}
+      readOnly={!isParticipant}
     />
   );
 }

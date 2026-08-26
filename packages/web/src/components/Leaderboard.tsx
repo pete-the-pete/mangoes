@@ -72,6 +72,13 @@ export function Leaderboard({ itemTypes, participants, aggregate, me }: Leaderbo
           </tr>
         </tbody>
       </table>
+      {/* groupTotal folds in entries logged for the group as a whole (an
+          admin-only action with no member-facing surface), so Total can run
+          higher than the rows above it add up to — spelled out here so that
+          reads as expected, not as a bug. */}
+      <p className="border-t border-gray-100 p-2 text-xs text-gray-500">
+        Total also counts entries logged for the group, not credited to any one person.
+      </p>
     </div>
   );
 }

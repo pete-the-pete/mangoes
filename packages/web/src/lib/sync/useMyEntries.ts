@@ -9,15 +9,6 @@ export interface UseMyEntriesResult {
   /** IndexedDB unavailable — there is no local record to show. */
   degraded: boolean;
   refresh(): Promise<void>;
-  /**
-   * Routes to `store.undo`, which is itself already the right two-case
-   * dispatch for "delete" here: a still-unclaimed pending log is dropped
-   * with no network call; anything else (synced, or claimed by a live
-   * flush) is queued as a void. This hook doesn't need its own delete
-   * primitive — it needs a home for the store handle so a component never
-   * reaches past a hook into the store directly (see useSession).
-   */
-  remove(clientEntryId: string): Promise<void>;
 }
 
 /**
@@ -28,7 +19,16 @@ export interface UseMyEntriesResult {
  * so the caller decides when to re-read — typically whenever a co-mounted
  * `useSession` for the same session reports its `pending`/`aggregate`
  * changed, since that's the signal a flush just settled (a pending row went
- * synced) or a void this hook queued just landed.
+ * synced) or a void just landed.
+ *
+ * Read-only on purpose — no `undo`/`remove` here. Deleting a row needs
+ * `store.undo`, but calling it through THIS hook's own separately-opened
+ * store handle would queue the write correctly and then leave it waiting
+ * for whatever `useSession` instance happens to be running its flush timer
+ * next (up to 15s, or an online/visibility event) — that hook's client owns
+ * the flush loop and calls `void flush()` immediately after `undo`, so
+ * callers should route deletes through `useSession(sessionId, ...).undo`
+ * instead (see `EntryList`).
  */
 export function useMyEntries(sessionId: string): UseMyEntriesResult {
   const [entries, setEntries] = useState<LocalEntry[]>([]);
@@ -60,15 +60,5 @@ export function useMyEntries(sessionId: string): UseMyEntriesResult {
     };
   }, [sessionId]);
 
-  const remove = useCallback(
-    async (clientEntryId: string) => {
-      const store = storeRef.current;
-      if (!store) return;
-      await store.undo(sessionId, clientEntryId);
-      await refresh();
-    },
-    [sessionId, refresh],
-  );
-
-  return { entries, degraded, refresh, remove };
+  return { entries, degraded, refresh };
 }

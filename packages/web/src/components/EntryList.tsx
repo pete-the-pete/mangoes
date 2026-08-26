@@ -15,6 +15,11 @@ export interface EntryListProps {
   sessionId: string;
   me: string;
   itemTypes: EntryListItemType[];
+  /** True for a viewer who isn't a session participant (e.g. the platform
+   *  owner looking via the member API's superuser bypass) — there is
+   *  nothing of theirs to delete, so the delete action is hidden rather
+   *  than wired to an id that was never this viewer's own. */
+  readOnly?: boolean;
 }
 
 function formatTime(iso: string): string {
@@ -33,18 +38,30 @@ const STATE_COPY: Record<EntryState, string> = {
  * own entries are stored locally, so this is always available offline.
  *
  * Also mounts `useSession` for this session — not to render its aggregate,
- * but to keep the sync engine (cold open, flush timer, online listener,
- * SSE) alive on whichever page this renders on, and as the refresh signal:
- * whenever that hook's `pending`/`aggregate` changes, a flush or delta just
- * settled something in IndexedDB that this list needs to re-read.
+ * but for two things: (1) to keep the sync engine (cold open, flush timer,
+ * online listener, SSE) alive on whichever page this renders on, and as the
+ * refresh signal for `useMyEntries`; (2) delete routes through THIS hook's
+ * own `undo`, not `useMyEntries`'s separate store handle — `useSession`'s
+ * client is the one that owns the flush loop, and its `undo` calls
+ * `void flush()` immediately after queuing a void, instead of leaving it to
+ * wait for the next poll tick (up to 15s) or an online/visibility event.
+ * `useMyEntries` keeps its own store handle purely for reading rows; writing
+ * through it would queue the void correctly but never prompt a flush,
+ * leaving "Removing…" visibly stuck.
  */
-export function EntryList({ sessionId, me, itemTypes }: EntryListProps) {
-  const { state } = useSession(sessionId, me);
-  const { entries, degraded, refresh, remove } = useMyEntries(sessionId);
+export function EntryList({ sessionId, me, itemTypes, readOnly = false }: EntryListProps) {
+  const { state, undo } = useSession(sessionId, me);
+  const { entries, degraded, refresh } = useMyEntries(sessionId);
 
+  // Depend on primitives, not `state.pending` itself: `refreshPending()`
+  // (inside client.ts) assigns a brand-new array on every poll tick and SSE
+  // push, so a reference-based dependency would re-read `readMyEntries` on
+  // every sync tick regardless of whether anything relevant changed. Length
+  // plus cursor only change when something this list would actually need to
+  // reflect (a flush settled, a void landed, a delta advanced) happened.
   useEffect(() => {
     void refresh();
-  }, [state.pending, state.aggregate.cursor, refresh]);
+  }, [state.pending.length, state.aggregate.cursor, refresh]);
 
   if (degraded) {
     return (
@@ -79,10 +96,10 @@ export function EntryList({ sessionId, me, itemTypes }: EntryListProps) {
               <span className={`text-xs ${entry.state === "pending" ? "text-blue-600" : "text-gray-500"}`}>
                 {STATE_COPY[entry.state]}
               </span>
-              {!isVoiding && (
+              {!isVoiding && !readOnly && (
                 <button
                   type="button"
-                  onClick={() => void remove(entry.clientEntryId)}
+                  onClick={() => void undo(entry.clientEntryId)}
                   className="text-xs font-medium text-red-600 hover:underline"
                 >
                   Delete

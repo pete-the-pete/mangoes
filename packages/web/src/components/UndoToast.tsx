@@ -37,7 +37,7 @@ export function UndoToast({ label, onUndo, onDismiss }: UndoToastProps) {
           onUndo();
           onDismiss();
         }}
-        className="font-semibold text-teal-300 hover:underline"
+        className="font-semibold text-blue-300 hover:underline"
       >
         Undo
       </button>
