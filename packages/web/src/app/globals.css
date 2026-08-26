@@ -1,3 +1,12 @@
+/* Layer order, declared before the Tailwind import so this statement is the
+   first one the browser sees and therefore the one that wins.
+   `clerk` sits below Tailwind's utilities on purpose: Clerk injects its own
+   stylesheet, and without this its rules beat the classes passed through
+   appearance.elements — the sticker border and shadow land on the element and
+   then compute to nothing. Paired with `cssLayerName: "clerk"` in
+   clerkAppearance.ts; changing one without the other silently breaks it. */
+@layer theme, base, clerk, components, utilities;
+
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------

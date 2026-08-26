@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Anton, Space_Grotesk } from "next/font/google";
 import { RegisterServiceWorker } from "./RegisterServiceWorker";
+import { clerkAppearance } from "./clerkAppearance";
 import "./globals.css";
 
 // The design system's two families, and only these two (docs/design/handoff.md):
@@ -48,7 +49,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       {/* Clerk v7 requires ClerkProvider inside <body>, not wrapping <html> —
           wrapping <html> opts the whole app into dynamic rendering. */}
       <body className="min-h-full flex flex-col">
-        <ClerkProvider>{children}</ClerkProvider>
+        <ClerkProvider appearance={clerkAppearance}>{children}</ClerkProvider>
         <RegisterServiceWorker />
       </body>
     </html>
