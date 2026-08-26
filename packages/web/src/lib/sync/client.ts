@@ -162,27 +162,29 @@ function settledSomething(result: FlushResult): boolean {
  * that doesn't cleanly settle (400, or an uninterpretable response) — it never
  * skips ahead to a later batch. That ordering is what keeps `abortFlush` (see
  * below) safe to call: `abortFlush(sessionId, attemptId)` releases every op
- * still owned by `attemptId` with no per-batch selectivity, and `settleFlush`
- * has already durably removed every EARLIER batch's ops from the outbox by
- * the time a later batch fails — so there is never a settled-or-malformed
- * batch still sitting under `attemptId` for a later `abortFlush` call to
- * wrongly sweep up.
+ * still owned by `attemptId` with no per-batch selectivity, but by the time
+ * any batch fails, `settleFlush` has already durably removed every EARLIER
+ * batch's ops from the outbox — so an `abortFlush` at the failure point only
+ * ever releases the failed batch plus whatever hadn't been attempted yet,
+ * never something already settled.
  *
  * Per batch:
  * - 200: the server's own per-op verdict (`FlushOutcome`) is authoritative.
  *   `settleFlush` reconciles the outbox and `myEntries` against it. The loop
  *   continues to the next batch.
  * - HTTP 400: `parseAppendOps` rejects the ENTIRE batch before any DB write —
- *   so nothing in it reached the server — but there is no per-op `rejected[]`
- *   to settle against, and no way to tell which op was the bad one. This
- *   batch (and any batches after it in this same claim, never even attempted)
- *   are left exactly as claimed: not settled, not aborted. They stay owned by
- *   this now-abandoned `attemptId` forever, so the NEXT `beginFlush` call — on
- *   the next timer tick, `online` event, etc. — cannot reclaim them, which is
- *   what stops this from silently retrying (and re-400ing) forever. Newly
- *   enqueued ops are unaffected: unclaimed by definition, swept into a fresh
- *   attempt next cycle. Un-wedging the stuck batch is `evictOp`'s job —
- *   deliberately a manual action, not part of this automatic lifecycle.
+ *   a parse-time rejection, so nothing in it reached the ledger. That makes
+ *   these ops the SAME case as "response we can't interpret," not the "may
+ *   have reached the server" case the binding invariant is protecting: abort
+ *   is exactly the right verb. `abortFlush(sessionId, attemptId)` releases
+ *   this batch (and any batches after it in this same claim, never even
+ *   attempted) back to unclaimed, so the next `beginFlush` reclaims and
+ *   resends them. Status is still reported as `"malformed"`, distinct from
+ *   `"retry"`, because the caller needs to know this one is not a transient
+ *   failure — a batch that's genuinely malformed will keep 400ing (and
+ *   keep getting released) every cycle until something calls `evictOp` on
+ *   the bad op. There is currently no automatic or UI path that does that —
+ *   see the report.
  * - Anything else not ok (network failure with no response at all, a non-400
  *   error status, or a 200 whose body isn't parseable JSON): a response this
  *   code cannot interpret as either a real per-op outcome or a definitive
@@ -215,6 +217,13 @@ export async function flushOutbox(
     }
 
     if (response.status === 400) {
+      // Parse-time rejection: nothing in this batch reached the ledger, so
+      // (unlike an uninterpretable response) we know for certain these ops
+      // are not "may have reached the server" — abort releases them for a
+      // retry rather than leaving them permanently claimed. Still reported
+      // as "malformed", not "retry": the caller needs to know this batch is
+      // poisoned, not merely transient.
+      await store.abortFlush(sessionId, attemptId);
       return { status: "malformed", outcome: merged };
     }
 

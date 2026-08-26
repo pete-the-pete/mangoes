@@ -69,21 +69,21 @@ describe("flushOutbox", () => {
     expect(mine[0]!.state).toBe("synced");
   });
 
-  it("an HTTP 400 on a malformed batch leaves the claim in place and never re-sends it", async () => {
-    await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: SUBJECT });
+  it("an HTTP 400 releases the claim — nothing in a parse-rejected batch reached the ledger", async () => {
+    const entry = await store.enqueueLog(SESSION, { itemTypeKey: "mango", subjectUserId: SUBJECT });
 
     const fetchImpl = fetchSequence(new Response(null, { status: 400 }));
     const result = await flushOutbox(store, SESSION, fetchImpl);
     expect(result.status).toBe("malformed");
 
-    // The op is still there (never deleted, never settled) and still claimed —
-    // a second flush call must NOT re-send it, i.e. it must see nothing to claim.
+    // Released, not stuck: still present, no attemptId, and a subsequent
+    // beginFlush reclaims it rather than seeing an empty claim.
     const outbox = await store.readOutbox(SESSION);
     expect(outbox).toHaveLength(1);
-    expect(outbox[0]!.attemptId).toBeDefined();
+    expect(outbox[0]!.attemptId).toBeUndefined();
 
-    const second = await flushOutbox(store, SESSION, fetchSequence());
-    expect(second).toEqual({ status: "empty" });
+    const { ops: reclaimed } = await store.beginFlush(SESSION);
+    expect(reclaimed.map((op) => op.clientEntryId)).toEqual([entry.clientEntryId]);
   });
 
   it("a request that never returns aborts the claim so the same ops are retried next time", async () => {
@@ -201,7 +201,7 @@ describe("flushOutbox", () => {
     expect(mine.every((e) => e.state === "synced")).toBe(true);
   }, 30_000);
 
-  it("a malformed second batch leaves it (and nothing behind it) claimed, while the first batch's settle stands", async () => {
+  it("a malformed later batch is released for retry while an earlier, already-settled batch stays settled", async () => {
     const count = MAX_BATCH + 5;
     const ids: string[] = [];
     for (let i = 0; i < count; i++) {
@@ -231,14 +231,19 @@ describe("flushOutbox", () => {
       expect(result.outcome?.accepted).toHaveLength(MAX_BATCH);
     }
 
-    // First batch's ops are gone (settled); the second batch's 5 ops are
-    // still there, still claimed, never resent by a follow-up flush.
+    // First batch's ops are gone (settled, synced). The second batch's 5 ops
+    // are still there, but RELEASED — no attemptId — so a subsequent
+    // beginFlush reclaims them rather than seeing an empty claim.
     const outbox = await store.readOutbox(SESSION);
     expect(outbox).toHaveLength(5);
-    expect(outbox.every((op) => op.attemptId !== undefined)).toBe(true);
+    expect(outbox.every((op) => op.attemptId === undefined)).toBe(true);
 
-    const second = await flushOutbox(store, SESSION, fetchSequence());
-    expect(second).toEqual({ status: "empty" });
+    const { ops: reclaimed } = await store.beginFlush(SESSION);
+    expect(reclaimed).toHaveLength(5);
+
+    const mine = await store.readMyEntries(SESSION);
+    expect(mine).toHaveLength(count);
+    expect(mine.filter((e) => e.state === "synced")).toHaveLength(MAX_BATCH);
   }, 30_000);
 });
 
