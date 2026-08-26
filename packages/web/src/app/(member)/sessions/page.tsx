@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { getCurrentUserRole } from "@/lib/auth";
-import { cycleStore, itemTypeStore } from "@/lib/db";
+import { cohortStore, cycleStore, itemTypeStore } from "@/lib/db";
 import { splitSessionListItems } from "@/lib/memberSessions";
 import { SessionCard } from "@/components/SessionCard";
 import { SessionGroups } from "@/components/SessionGroups";
-import { ButtonLink } from "@/components/ui/Button";
+import { EmptySessions } from "@/components/EmptySessions";
 import { PageShell } from "@/components/ui/PageShell";
-import { Label } from "@/components/ui/Label";
 
 // The browsable counterpart to the `/` chooser: same three groupings, but a
 // plain list — choosing here never touches the current-session pointer, it
@@ -21,30 +20,29 @@ export default async function SessionsPage() {
     return null;
   }
 
-  const [cycles, catalog] = await Promise.all([
+  const [cycles, catalog, groups] = await Promise.all([
     cycleStore.listCyclesForParticipant(current.clerkUserId),
     itemTypeStore.listItemTypes(),
+    cohortStore.listCohortsForUser(current.clerkUserId),
   ]);
   const emojiByKey = new Map(catalog.map((t) => [t.key, t.emoji]));
   const { live, scheduled, recent } = splitSessionListItems(cycles, emojiByKey);
   const isEmpty = live.length === 0 && scheduled.length === 0 && recent.length === 0;
 
+  // The same two-state explanation the chooser gives, rather than this page's
+  // old one-liner — a member who lands here from the nav instead of from `/`
+  // deserves the same answer to "why is this empty?"
+  if (isEmpty) {
+    return (
+      <PageShell className="justify-center">
+        <EmptySessions groups={groups.map((g) => ({ id: g.id, name: g.name }))} />
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-42">Sessions</h1>
-        {/* The only member-facing route to /account: members have no
-            persistent nav, and this is the list screen they always pass
-            through. */}
-        <ButtonLink href="/account" tone="secondary" size="sm">
-          Account
-        </ButtonLink>
-      </div>
-      {isEmpty && (
-        <Label size={11} as="p" className="text-rust">
-          No sessions yet — an admin will add you to one.
-        </Label>
-      )}
+      <h1 className="font-display text-42">Sessions</h1>
       <SessionGroups
         live={live}
         scheduled={scheduled}

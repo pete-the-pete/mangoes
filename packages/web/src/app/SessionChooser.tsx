@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SessionCard } from "@/components/SessionCard";
-import { ButtonLink } from "@/components/ui/Button";
+import { EmptySessions, type EmptySessionsGroup } from "@/components/EmptySessions";
 import { PageShell } from "@/components/ui/PageShell";
 import { Label } from "@/components/ui/Label";
 import { SessionGroups } from "@/components/SessionGroups";
@@ -13,6 +13,8 @@ export interface SessionChooserProps {
   live: SessionListItem[];
   scheduled: SessionListItem[];
   recent: SessionListItem[];
+  /** Only read when there are no sessions — see EmptySessions. */
+  groups: EmptySessionsGroup[];
 }
 
 /**
@@ -22,7 +24,7 @@ export interface SessionChooserProps {
  * next time. Browsing `/sessions` later never repeats this PUT; that page is
  * a plain list, not another chooser.
  */
-export function SessionChooser({ live, scheduled, recent }: SessionChooserProps) {
+export function SessionChooser({ live, scheduled, recent, groups }: SessionChooserProps) {
   const router = useRouter();
   const [choosingId, setChoosingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,33 +54,15 @@ export function SessionChooser({ live, scheduled, recent }: SessionChooserProps)
 
   if (isEmpty) {
     return (
-      <PageShell className="items-center justify-center text-center">
-        <span aria-hidden="true" className="animate-bob text-[5rem] leading-none">
-          🥭
-        </span>
-        <h1 className="font-display text-30">Nothing to log yet</h1>
-        <Label size={11} as="p" className="text-rust">
-          An admin will add you to a session.
-        </Label>
-        {/* Load-bearing, not decoration: a freshly invited member with no
-            sessions lands here, and this is the only screen they can reach.
-            Without this link the person the name feature exists for has no
-            route to /account at all. */}
-        <ButtonLink href="/account" tone="secondary" size="sm">
-          Set your name
-        </ButtonLink>
+      <PageShell className="justify-center">
+        <EmptySessions groups={groups} />
       </PageShell>
     );
   }
 
   return (
     <PageShell>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-42">Choose a session</h1>
-        <ButtonLink href="/account" tone="secondary" size="sm">
-          Account
-        </ButtonLink>
-      </div>
+      <h1 className="font-display text-42">Choose a session</h1>
       {error && (
         <Label size={11} as="p" role="alert" className="text-hot-pink">
           {error}

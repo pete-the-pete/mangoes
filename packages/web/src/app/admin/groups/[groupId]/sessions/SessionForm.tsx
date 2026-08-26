@@ -187,10 +187,25 @@ export function SessionForm(props: SessionFormProps) {
       />
 
       <fieldset className="flex flex-col gap-2.5">
-        <legend className="mb-1">
-          <Label size={10} className="text-rust">
-            Who&rsquo;s in the crew
-          </Label>
+        <legend className="mb-1 w-full">
+          <span className="flex flex-wrap items-center justify-between gap-2">
+            <Label size={10} className="text-rust">
+              Who&rsquo;s in the crew · {participantIds.length} of {props.members.length}
+            </Label>
+            {/* A member added to the group after this session was created is
+                not a participant of it — the two lists are separate, and
+                nothing else in the UI says so. An admin who never notices is
+                how someone ends up staring at "Nothing to log yet." */}
+            {props.canManage && participantIds.length < props.members.length && (
+              <button
+                type="button"
+                onClick={() => setParticipantIds(props.members.map((m) => m.clerkUserId))}
+                className="font-display text-rust cursor-pointer text-15 underline underline-offset-4 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink"
+              >
+                Add everyone
+              </button>
+            )}
+          </span>
         </legend>
         {props.members.map((member) => {
           const checked = participantIds.includes(member.clerkUserId);

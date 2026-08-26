@@ -3,7 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentUserRole } from "@/lib/auth";
 import { cohortStore, cycleStore, itemTypeStore } from "@/lib/db";
 import { listGroupRosterForMember } from "@/lib/memberGroups";
-import { splitSessionListItems } from "@/lib/memberSessions";
+import {
+  splitGroupSessionsByParticipation,
+  splitSessionListItems,
+} from "@/lib/memberSessions";
 import { SessionCard } from "@/components/SessionCard";
 import { SessionGroups } from "@/components/SessionGroups";
 import { PageShell } from "@/components/ui/PageShell";
@@ -51,6 +54,11 @@ export default async function GroupPage({ params }: PageProps) {
   const emojiByKey = new Map(catalog.map((t) => [t.key, t.emoji]));
   const { live, scheduled, recent } = splitSessionListItems(cycles, emojiByKey);
 
+  const { participatingIds, excludedCount } = splitGroupSessionsByParticipation(
+    cycles,
+    current.clerkUserId,
+  );
+
   return (
     <PageShell className="gap-8">
       <h1 className="font-display text-42">{group.name}</h1>
@@ -82,19 +90,40 @@ export default async function GroupPage({ params }: PageProps) {
         </ul>
       </section>
 
+      {excludedCount > 0 && (
+        <Label size={11} as="p" className="text-rust">
+          {excludedCount === 1
+            ? "One session below doesn't"
+            : `${excludedCount} sessions below don't`}{" "}
+          have you in the crew, so {excludedCount === 1 ? "it isn't" : "they aren't"} yours to
+          open. Ask an admin to add you.
+        </Label>
+      )}
+
       <SessionGroups
         live={live}
         scheduled={scheduled}
         recent={recent}
-        renderItem={(item) => (
-          <Link
-            key={item.id}
-            href={`/sessions/${item.id}`}
-            className="rounded-20 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink"
-          >
-            <SessionCard {...item} />
-          </Link>
-        )}
+        renderItem={(item) =>
+          participatingIds.has(item.id) ? (
+            <Link
+              key={item.id}
+              href={`/sessions/${item.id}`}
+              className="rounded-20 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink"
+            >
+              <SessionCard {...item} />
+            </Link>
+          ) : (
+            <div key={item.id} className="flex flex-col gap-1">
+              <div className="opacity-55">
+                <SessionCard {...item} />
+              </div>
+              <Label size={10} className="text-rust pl-1">
+                You&rsquo;re not in this one
+              </Label>
+            </div>
+          )
+        }
       />
     </PageShell>
   );
