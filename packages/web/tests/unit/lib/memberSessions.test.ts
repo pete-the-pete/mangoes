@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   splitByStatus,
+  splitGroupSessionsByParticipation,
   splitSessionListItems,
   toMemberSessionJson,
   toSessionListItem,
@@ -63,5 +64,31 @@ describe("splitSessionListItems", () => {
     expect(result.live.map((s) => s.id)).toEqual(["s1"]);
     expect(result.scheduled.map((s) => s.id)).toEqual(["s2"]);
     expect(result.recent.map((s) => s.id)).toEqual(["s3"]);
+  });
+});
+
+describe("splitGroupSessionsByParticipation", () => {
+  it("separates the group's sessions the member is in from the ones they aren't", () => {
+    const mine = { ...base, id: "s1", participantIds: ["u1", "u2"] };
+    const theirs = { ...base, id: "s2", participantIds: ["u2"] };
+    const result = splitGroupSessionsByParticipation([mine, theirs], "u1");
+    expect([...result.participatingIds]).toEqual(["s1"]);
+    expect(result.excludedCount).toBe(1);
+  });
+
+  // The state this whole change exists for: joining a group after its sessions
+  // were created leaves you in the group and in none of them.
+  it("counts every session as excluded for a member in none of them", () => {
+    const cycles = [
+      { ...base, id: "s1", participantIds: ["u2"] },
+      { ...base, id: "s2", participantIds: ["u2", "u3"] },
+    ];
+    const result = splitGroupSessionsByParticipation(cycles, "u1");
+    expect(result.participatingIds.size).toBe(0);
+    expect(result.excludedCount).toBe(2);
+  });
+
+  it("excludes nothing for a group with no sessions", () => {
+    expect(splitGroupSessionsByParticipation([], "u1").excludedCount).toBe(0);
   });
 });

@@ -9,6 +9,9 @@ import { StatTile } from "@/components/ui/StatTile";
 import { Interactive } from "./Interactive";
 import { Leaderboard } from "@/components/Leaderboard";
 import { SyncBadge } from "@/components/SyncBadge";
+import { MemberNav } from "@/components/MemberNav";
+import { EmptySessions } from "@/components/EmptySessions";
+import { AdminNav } from "@/app/admin/AdminNav";
 
 /**
  * A living style guide for the design system in docs/design/.
@@ -188,6 +191,30 @@ export default function DesignPreview() {
             },
           }}
         />
+      </Section>
+
+      {/* Both bars and both empty states, because every screen that renders
+          them for real needs auth and a seeded database — which is the whole
+          reason this page exists. */}
+      <Section title="Nav bars">
+        <div className="border-ink rounded-20 overflow-hidden border-4 border-solid">
+          <MemberNav />
+        </div>
+        <div className="border-ink rounded-20 overflow-hidden border-4 border-solid">
+          <MemberNav currentRole="owner" />
+        </div>
+        <div className="border-ink rounded-20 overflow-hidden border-4 border-solid">
+          <AdminNav currentRole="owner" />
+        </div>
+      </Section>
+
+      <Section title="Empty sessions (both states)">
+        <div className="bg-cream border-ink rounded-20 border-4 border-solid p-6">
+          <EmptySessions groups={[{ id: "g1", name: "Sunday Ripeness Club" }]} />
+        </div>
+        <div className="bg-cream border-ink rounded-20 border-4 border-solid p-6">
+          <EmptySessions groups={[]} />
+        </div>
       </Section>
 
       <Section title="Sync states">

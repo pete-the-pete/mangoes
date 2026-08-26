@@ -113,3 +113,31 @@ export function splitSessionListItems(
   }
   return { live, scheduled, recent };
 }
+
+export interface GroupSessionParticipation {
+  /** Ids of the group's sessions this member actually takes part in. */
+  participatingIds: Set<string>;
+  /** How many of the group's sessions they are not in. */
+  excludedCount: number;
+}
+
+/**
+ * Splits a group's sessions into the ones the viewer is in and the ones they
+ * aren't.
+ *
+ * The member group page lists every session in the *group*, but
+ * `/sessions/[id]` is gated on being in that session's `cycle_participants` —
+ * two different lists. Linking all of them sent members who weren't in the
+ * crew to a 404 that read as a broken app rather than as "you're not in this
+ * one," which is the state a member lands in whenever they join a group after
+ * a session was already created.
+ */
+export function splitGroupSessionsByParticipation(
+  cycles: CycleDetail[],
+  clerkUserId: string,
+): GroupSessionParticipation {
+  const participatingIds = new Set(
+    cycles.filter((c) => c.participantIds.includes(clerkUserId)).map((c) => c.id),
+  );
+  return { participatingIds, excludedCount: cycles.length - participatingIds.size };
+}
