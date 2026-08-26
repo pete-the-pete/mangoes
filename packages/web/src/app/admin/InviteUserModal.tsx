@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { TextField, SelectField } from "@/components/ui/Field";
+import { Modal } from "@/components/ui/Modal";
 
 // Mirrors the server-side check in POST /admin/api/users/invite. Checked here
 // first so an invalid address never costs a network round-trip; the server
@@ -14,18 +18,10 @@ export function InviteUserModal({
   onClose: () => void;
   onInvited: (email: string) => void;
 }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "member">("admin");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  // A native <dialog> opened with showModal() gives Escape-to-close, focus
-  // trapping, and inertness for the rest of the page for free — all of which a
-  // hand-rolled `fixed inset-0` overlay would have to reimplement.
-  useEffect(() => {
-    dialogRef.current?.showModal();
-  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -54,71 +50,44 @@ export function InviteUserModal({
     onInvited(trimmed);
   }
 
+  // The native <dialog>, Escape handling, focus trap and light-dismiss all
+  // live in Modal now — it is the one implementation for the app.
   return (
-    <dialog
-      ref={dialogRef}
-      aria-labelledby="invite-user-title"
-      // Fires on Escape as well as an explicit close() — one path to unmount.
-      onClose={onClose}
-      // <dialog> has no built-in light-dismiss: a click landing on the element
-      // itself rather than a child is a click on the backdrop.
-      onClick={(e) => {
-        if (e.target === dialogRef.current) {
-          dialogRef.current?.close();
-        }
-      }}
-      className="w-80 rounded bg-white p-4 text-gray-900 shadow-lg backdrop:bg-black/40"
-    >
-      <form onSubmit={handleSubmit}>
-        <h2 id="invite-user-title" className="mb-3 text-lg font-semibold">
-          Invite user
-        </h2>
-        <label className="mb-2 block text-sm">
-          Gmail address
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded border px-2 py-1"
-            placeholder="friend@gmail.com"
-            required
-          />
-        </label>
-        <label className="mb-3 block text-sm">
-          Role
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as "admin" | "member")}
-            className="mt-1 w-full rounded border px-2 py-1"
-          >
-            {/* No "Super Admin" option: the invite route rejects role "owner".
-                Owners are bootstrapped or promoted, never invited. */}
-            <option value="admin">Admin</option>
-            <option value="member">Member</option>
-          </select>
-        </label>
+    <Modal title="Invite to platform" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <TextField
+          label="Gmail address"
+          type="email"
+          // `plain`: an address rendered in Anton would show the user
+          // FRIEND@GMAIL.COM while submitting the lowercase value.
+          face="plain"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="friend@gmail.com"
+          required
+        />
+        <SelectField label="Role" value={role} onChange={(e) => setRole(e.target.value as "admin" | "member")}>
+          {/* No "Super Admin" option: the invite route rejects role "owner".
+              Owners are bootstrapped or promoted, never invited. */}
+          <option value="admin">Admin</option>
+          <option value="member">Member</option>
+        </SelectField>
         {error && (
-          <p role="alert" className="mb-2 text-sm text-red-600">
-            {error}
-          </p>
+          <Card tone="pink" border={3} radius={16} lift="xs" className="px-3 py-2">
+            <p role="alert" className="text-12 text-cream leading-snug">
+              {error}
+            </p>
+          </Card>
         )}
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => dialogRef.current?.close()}
-            className="px-3 py-1 text-sm"
-          >
+        <div className="flex justify-end gap-3">
+          <Button type="button" tone="secondary" size="sm" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded bg-teal-600 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
-          >
+          </Button>
+          <Button type="submit" size="sm" disabled={submitting}>
             {submitting ? "Sending…" : "Send invite"}
-          </button>
+          </Button>
         </div>
       </form>
-    </dialog>
+    </Modal>
   );
 }

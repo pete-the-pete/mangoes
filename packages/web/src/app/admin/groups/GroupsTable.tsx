@@ -4,6 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import { NewGroupModal } from "./NewGroupModal";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Label } from "@/components/ui/Label";
+import { Pill } from "@/components/ui/Pill";
 
 export interface GroupView {
   id: string;
@@ -19,42 +23,47 @@ export function GroupsTable({ initialGroups }: { initialGroups: GroupView[] }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          className="rounded bg-black px-3 py-1.5 text-sm text-white"
-        >
+        <Button tone="primary" size="sm" onClick={() => setModalOpen(true)}>
           New group
-        </button>
+        </Button>
       </div>
 
       {initialGroups.length === 0 ? (
-        <p className="text-sm text-gray-500">
-          No groups yet. Create one to start setting up sessions.
-        </p>
+        <Card tone="cream" border={4} radius={18} lift="xs" className="flex flex-col gap-1 p-4">
+          <span className="font-display text-20">No groups yet</span>
+          <Label size={10} as="p" className="text-rust">
+            Create one to start setting up sessions.
+          </Label>
+        </Card>
       ) : (
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-gray-200 text-gray-500">
-              <th className="py-2">Name</th>
-              <th className="py-2">Members</th>
-              <th className="py-2">Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {initialGroups.map((group) => (
-              <tr key={group.id} className="border-b border-gray-100">
-                <td className="py-2">
-                  <Link href={`/admin/groups/${group.id}`} className="hover:underline">
-                    {group.name}
-                  </Link>
-                </td>
-                <td className="py-2">{group.memberCount}</td>
-                <td className="py-2 text-gray-500">{group.created}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ul className="flex flex-col gap-2.5">
+          {initialGroups.map((group) => (
+            <li key={group.id}>
+              <Link
+                href={`/admin/groups/${group.id}`}
+                className="rounded-18 block focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-ink"
+              >
+                <Card
+                  tone="cream"
+                  border={4}
+                  radius={18}
+                  lift="xs"
+                  className="flex items-center justify-between gap-3 p-3"
+                >
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="font-display text-20 min-w-0 truncate">{group.name}</span>
+                    <Label size={9} className="text-rust">
+                      Created {group.created}
+                    </Label>
+                  </span>
+                  <Pill tone="turquoise" className="shrink-0">
+                    {group.memberCount} {group.memberCount === 1 ? "member" : "members"}
+                  </Pill>
+                </Card>
+              </Link>
+            </li>
+          ))}
+        </ul>
       )}
 
       {isModalOpen && (

@@ -1,5 +1,6 @@
 import { getCurrentUserRole } from "@/lib/auth";
 import { listUsersForAdmin } from "@/lib/adminUsers";
+import { cohortStore } from "@/lib/db";
 import { AdminUserTable, type AdminUserView } from "./AdminUserTable";
 
 // Fixed locale and timezone on purpose. `toLocaleDateString()` inside the client
@@ -26,19 +27,25 @@ export default async function AdminPage() {
   // (and is already covered by its own tests), but a server component has no
   // reason to make an HTTP round-trip to itself.
   const users = await listUsersForAdmin();
+  // Screen 8's stat trio needs a group count. Derived, never hardcoded — as is
+  // the admin count, which AdminUserTable computes from the roster it renders
+  // so the two can't disagree after an optimistic role change.
+  const groupCount = (
+    current.role === "owner"
+      ? await cohortStore.listCohorts()
+      : await cohortStore.listCohortsForUser(current.clerkUserId)
+  ).length;
   const rows: AdminUserView[] = users.map((u) => ({
     ...u,
     joined: JOINED_FMT.format(new Date(u.createdAt)),
   }));
 
   return (
-    <div className="mx-auto w-full max-w-3xl p-6">
-      <h1 className="mb-4 text-xl font-semibold">Users</h1>
-      <AdminUserTable
-        initialUsers={rows}
-        canManage={current.role === "owner"}
-        currentUserId={current.clerkUserId}
-      />
-    </div>
+    <AdminUserTable
+      initialUsers={rows}
+      canManage={current.role === "owner"}
+      currentUserId={current.clerkUserId}
+      groupCount={groupCount}
+    />
   );
 }

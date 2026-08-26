@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUserRole } from "@/lib/auth";
 import { AdminNav } from "./AdminNav";
+import { PageShell } from "@/components/ui/PageShell";
+import { Label } from "@/components/ui/Label";
 
 // Gates the /admin *pages* only. Route handlers don't run layouts, so the
 // /admin/api/* endpoints added in Tasks 7-9 are guarded by requireRole() inside
@@ -17,12 +19,15 @@ export default async function AdminLayout({
   }
   if (current.role !== "owner" && current.role !== "admin") {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-        <h1 className="text-xl font-semibold">Not authorized</h1>
-        <p className="text-sm text-gray-500">
+      <PageShell surface="ink-deep" className="items-center justify-center text-center">
+        <span aria-hidden="true" className="text-[4.5rem] leading-none">
+          🚪
+        </span>
+        <h1 className="font-display text-mango-yellow text-42">Not authorized</h1>
+        <Label size={11} as="p" className="text-cream/70">
           Your account does not have access to the admin area.
-        </p>
-      </div>
+        </Label>
+      </PageShell>
     );
   }
   return (

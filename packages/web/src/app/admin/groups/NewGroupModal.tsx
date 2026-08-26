@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { TextField } from "@/components/ui/Field";
+import { Modal } from "@/components/ui/Modal";
 
 export function NewGroupModal({
   onClose,
@@ -34,37 +38,35 @@ export function NewGroupModal({
     }
   }
 
+  // Was a hand-rolled `fixed inset-0` overlay with no Escape handling and no
+  // focus trap. Now the same Modal as every other dialog in the app.
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/40 p-4">
-      <form
-        onSubmit={submit}
-        className="flex w-full max-w-sm flex-col gap-3 rounded bg-white p-5"
-      >
-        <h2 className="text-lg font-semibold">New group</h2>
-        <label className="flex flex-col gap-1 text-sm">
-          Name
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            maxLength={80}
-            className="rounded border border-gray-300 px-2 py-1"
-          />
-        </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm">
+    <Modal title="Build a crew" onClose={onClose}>
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <TextField
+          label="Group name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          maxLength={80}
+          placeholder="Cabo Crew"
+        />
+        {error && (
+          <Card tone="pink" border={3} radius={16} lift="xs" className="px-3 py-2">
+            <p role="alert" className="text-12 text-cream leading-snug">
+              {error}
+            </p>
+          </Card>
+        )}
+        <div className="flex justify-end gap-3">
+          <Button type="button" tone="secondary" size="sm" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded bg-black px-3 py-1.5 text-sm text-white disabled:opacity-50"
-          >
-            Create
-          </button>
+          </Button>
+          <Button type="submit" tone="destructive" size="sm" disabled={isSubmitting}>
+            {isSubmitting ? "Creating…" : "Create group"}
+          </Button>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }
