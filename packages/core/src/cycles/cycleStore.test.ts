@@ -97,6 +97,29 @@ describe("createPostgresCycleStore", () => {
     expect(await store.isCycleParticipant(cycle.id, "u9")).toBe(false);
   });
 
+  // The round trip a group admin runs when they find themselves outside a
+  // session they administer: not a participant, added through the same
+  // updateCycle the crew picker calls, then a participant everywhere that
+  // matters — the gate, and the list their home screen is built from.
+  it("picks up a participant added to an existing cycle", async () => {
+    const cohort = await makeCohort();
+    const cycle = await store.createCycle({
+      cohortId: cohort.id, name: "Beach day", ...WINDOW,
+      itemTypeKeys: ["mango"], participantIds: ["u2"], createdBy: "u1",
+    });
+
+    expect(await store.isCycleParticipant(cycle.id, "u1")).toBe(false);
+    expect(await store.listCyclesForParticipant("u1")).toEqual([]);
+
+    await store.updateCycle(cycle.id, { participantIds: ["u2", "u1"] });
+
+    expect(await store.isCycleParticipant(cycle.id, "u1")).toBe(true);
+    expect((await store.listCyclesForParticipant("u1")).map((c) => c.id)).toEqual([cycle.id]);
+    // u2 keeps their place — the picker replaces the list wholesale, so the
+    // one thing this must not do is drop everyone who was already in it.
+    expect(await store.isCycleParticipant(cycle.id, "u2")).toBe(true);
+  });
+
   it("reports false for a cycle that does not exist", async () => {
     expect(await store.isCycleParticipant(
       "00000000-0000-4000-8000-000000000000", "u1")).toBe(false);

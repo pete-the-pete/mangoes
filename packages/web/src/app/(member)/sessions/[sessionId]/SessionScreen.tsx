@@ -8,6 +8,7 @@ import { rejectionMessage } from "@/lib/appendOps";
 import type { MemberSessionJson } from "@/lib/memberSessions";
 import { initialTapToastBookkeeping, pickTapToast, type TapToastBookkeeping } from "@/lib/tapToast";
 import { TapTarget, pickLayout, layoutContainerClass } from "@/components/TapTarget";
+import { SessionTabs } from "@/components/SessionTabs";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
 import { Leaderboard, type LeaderboardItemType, type LeaderboardParticipant } from "@/components/Leaderboard";
@@ -21,16 +22,26 @@ export interface SessionScreenProps {
   /** The signed-in member's own id — a member always logs for themselves. */
   me: string;
   /**
-   * True when `me` is not in `participants` — reachable only through the
-   * member API's platform-owner bypass (`requireCycleParticipant`'s
-   * superuser escape hatch), never for an actual participant. That bypass
-   * exists so an owner can look at any session, not so they can log into
+   * True when `me` is not in `participants` — reachable only through
+   * `requireCycleParticipant`'s escape hatches (the platform owner, or an
+   * admin of this session's group), never for an actual participant. Those
+   * hatches exist so someone can look at a session, not so they can log into
    * one they were never added to: a tap here would credit a subject with no
    * leaderboard row, manufacturing an extra, unexplained contributor to
    * Total. Read-only disables every tap target and the undo toast; the data
    * itself stays fully visible.
    */
   readOnly: boolean;
+  /**
+   * Where this session's admin screen lives, for a viewer who administers its
+   * group — otherwise undefined and no tab renders.
+   *
+   * A group admin used to have only the admin screen: sessions opened into the
+   * settings form and the log-for-anyone control, with no route to the screen
+   * everyone else in the group is looking at. This is the door between the two,
+   * and the admin page has the matching one back.
+   */
+  adminHref?: string | undefined;
 }
 
 interface ToastState {
@@ -43,7 +54,14 @@ interface ToastState {
  * The screen the product exists for. Everything else in this milestone is
  * scaffolding for this one.
  */
-export function SessionScreen({ session, itemTypes, participants, me, readOnly }: SessionScreenProps) {
+export function SessionScreen({
+  session,
+  itemTypes,
+  participants,
+  me,
+  readOnly,
+  adminHref,
+}: SessionScreenProps) {
   const { state, displayed, log, undo } = useSession(session.id, me);
   const [toast, setToast] = useState<ToastState | null>(null);
   const tapToastState = useRef<TapToastBookkeeping>(initialTapToastBookkeeping());
@@ -142,24 +160,12 @@ export function SessionScreen({ session, itemTypes, participants, me, readOnly }
           <SyncBadge pendingCount={state.pending.length} online={state.online} degraded={state.degraded} />
         </div>
 
-        {/* Screen 1's tab bar, as the three real destinations this screen has. */}
-        <nav className="border-ink bg-cream rounded-99 flex items-stretch overflow-hidden border-4 border-solid">
-          <span className="text-ink font-display bg-mango-yellow flex flex-1 items-center justify-center py-2 text-17">
-            Log
-          </span>
-          <Link
-            href={`/sessions/${session.id}/logs`}
-            className="font-display border-ink flex flex-1 items-center justify-center border-l-4 border-solid py-2 text-17 opacity-55 focus-visible:opacity-100 focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-ink"
-          >
-            Your logs
-          </Link>
-          <Link
-            href={`/groups/${session.groupId}`}
-            className="font-display border-ink flex flex-1 items-center justify-center border-l-4 border-solid py-2 text-17 opacity-55 focus-visible:opacity-100 focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-ink"
-          >
-            Group
-          </Link>
-        </nav>
+        <SessionTabs
+          sessionId={session.id}
+          groupId={session.groupId}
+          active="log"
+          adminHref={adminHref}
+        />
         <Link
           href="/sessions"
           className="font-display text-rust self-start text-15 underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink"

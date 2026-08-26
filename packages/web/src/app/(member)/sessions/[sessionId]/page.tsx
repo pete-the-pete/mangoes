@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { canManageCohort } from "@/lib/cohortAuth";
 import { requireCycleParticipant } from "@/lib/cycleAuth";
 import { cycleStore, itemTypeStore } from "@/lib/db";
 import { listCycleParticipants } from "@/lib/cycleParticipants";
@@ -39,9 +40,12 @@ export default async function SessionPage({ params }: PageProps) {
     notFound();
   }
 
-  const [catalog, participants] = await Promise.all([
+  const [catalog, participants, canManage] = await Promise.all([
     itemTypeStore.listItemTypes({ enabledOnly: false }),
     listCycleParticipants(cycle),
+    // Decides whether to offer the admin tab, nothing more — the admin page
+    // it points at runs its own gate, and so does every route under it.
+    canManageCohort(cycle.cohortId, me, guard.platformRole),
   ]);
 
   // Item types come from the cycle's own itemTypeKeys (already in
@@ -52,10 +56,11 @@ export default async function SessionPage({ params }: PageProps) {
     .filter((t): t is NonNullable<typeof t> => t !== undefined)
     .map((t) => ({ key: t.key, emoji: t.emoji, label: t.label }));
 
-  // requireCycleParticipant grants access to the platform owner even when
-  // they aren't a participant (its superuser escape hatch, for the API).
-  // That's for looking, not logging: a tap from someone not in
-  // participantIds would credit a subject with no leaderboard row.
+  // requireCycleParticipant lets the platform owner, and an admin of this
+  // session's group, in even when they aren't participants (its escape
+  // hatches, for the API). That's for looking, not logging: a tap from
+  // someone not in participantIds would credit a subject with no
+  // leaderboard row.
   const isParticipant = cycle.participantIds.includes(me);
 
   return (
@@ -65,6 +70,11 @@ export default async function SessionPage({ params }: PageProps) {
       participants={participants}
       me={me}
       readOnly={!isParticipant}
+      adminHref={
+        canManage
+          ? `/admin/groups/${cycle.cohortId}/sessions/${cycle.id}`
+          : undefined
+      }
     />
   );
 }

@@ -10,6 +10,7 @@ import { Interactive } from "./Interactive";
 import { Leaderboard } from "@/components/Leaderboard";
 import { SyncBadge } from "@/components/SyncBadge";
 import { MemberNav } from "@/components/MemberNav";
+import { SessionTabs } from "@/components/SessionTabs";
 import { EmptySessions } from "@/components/EmptySessions";
 import { AdminNav } from "@/app/admin/AdminNav";
 
@@ -206,6 +207,24 @@ export default function DesignPreview() {
         <div className="border-ink rounded-20 overflow-hidden border-4 border-solid">
           <AdminNav currentRole="owner" />
         </div>
+      </Section>
+
+      {/* Three tabs vs four: the fourth only exists for a group admin, and the
+          type steps down so it doesn't squash the other three on a phone. */}
+      <Section title="Session tabs">
+        <SessionTabs sessionId="s1" groupId="g1" active="log" />
+        <SessionTabs
+          sessionId="s1"
+          groupId="g1"
+          active="log"
+          adminHref="/admin/groups/g1/sessions/s1"
+        />
+        <SessionTabs
+          sessionId="s1"
+          groupId="g1"
+          active="logs"
+          adminHref="/admin/groups/g1/sessions/s1"
+        />
       </Section>
 
       <Section title="Empty sessions (both states)">

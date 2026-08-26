@@ -1,8 +1,9 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { canManageCohort } from "@/lib/cohortAuth";
 import { requireCycleParticipant } from "@/lib/cycleAuth";
 import { cycleStore, itemTypeStore } from "@/lib/db";
 import { EntryList } from "@/components/EntryList";
+import { SessionTabs } from "@/components/SessionTabs";
 import { PageShell } from "@/components/ui/PageShell";
 import { Label } from "@/components/ui/Label";
 
@@ -30,25 +31,33 @@ export default async function SessionLogsPage({ params }: PageProps) {
     notFound();
   }
 
-  const catalog = await itemTypeStore.listItemTypes({ enabledOnly: false });
+  const [catalog, canManage] = await Promise.all([
+    itemTypeStore.listItemTypes({ enabledOnly: false }),
+    canManageCohort(cycle.cohortId, me, guard.platformRole),
+  ]);
   const itemTypes = cycle.itemTypeKeys
     .map((key) => catalog.find((t) => t.key === key))
     .filter((t): t is NonNullable<typeof t> => t !== undefined)
     .map((t) => ({ key: t.key, emoji: t.emoji, label: t.label }));
 
   // Same non-participant case as the session screen (requireCycleParticipant's
-  // platform-owner bypass): nothing here would be this viewer's own entry, so
-  // the delete action has no legitimate target.
+  // escape hatches — the platform owner, or an admin of this session's group):
+  // nothing here would be this viewer's own entry, so the delete action has no
+  // legitimate target.
   const isParticipant = cycle.participantIds.includes(me);
 
   return (
     <PageShell className="gap-4">
-      <Link
-        href={`/sessions/${sessionId}`}
-        className="font-display text-rust self-start text-15 underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink"
-      >
-        ← Back to {cycle.name}
-      </Link>
+      {/* The same tab bar the session screen carries, so the admin tab (and
+          the way back) is reachable from here too rather than only from Log. */}
+      <SessionTabs
+        sessionId={sessionId}
+        groupId={cycle.cohortId}
+        active="logs"
+        adminHref={
+          canManage ? `/admin/groups/${cycle.cohortId}/sessions/${sessionId}` : undefined
+        }
+      />
       <h1 className="font-display text-42">Your logs</h1>
       <EntryList sessionId={sessionId} me={me} itemTypes={itemTypes} readOnly={!isParticipant} />
       {!isParticipant && (
