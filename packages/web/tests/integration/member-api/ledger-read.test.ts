@@ -130,9 +130,11 @@ describe("GET /api/sessions/:sessionId/snapshot", () => {
       { key: "mango", emoji: "🥭", label: "Mango" },
       { key: "taco", emoji: "🌮", label: "Taco" },
     ]);
+    // u2 has no first/last name in Clerk — the response must fall back to the
+    // generic, non-identifying label, never to their email.
     expect(body.participants).toEqual([
       { clerkUserId: "u1", name: "Pete L", imageUrl: "https://x/u1.png" },
-      { clerkUserId: "u2", name: "friend@gmail.com", imageUrl: "https://x/u2.png" },
+      { clerkUserId: "u2", name: "Unnamed member", imageUrl: "https://x/u2.png" },
     ]);
   });
 

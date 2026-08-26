@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUserRole } from "@/lib/auth";
 import { cohortStore, cycleStore, itemTypeStore } from "@/lib/db";
-import { listGroupMembersForAdmin } from "@/lib/adminGroups";
+import { listGroupRosterForMember } from "@/lib/memberGroups";
 import { splitSessionListItems, type SessionListItem } from "@/lib/memberSessions";
 import { SessionCard } from "@/components/SessionCard";
 
@@ -38,7 +38,7 @@ export default async function GroupPage({ params }: PageProps) {
   }
 
   const [members, cycles, catalog] = await Promise.all([
-    listGroupMembersForAdmin(groupId),
+    listGroupRosterForMember(groupId),
     cycleStore.listCyclesForCohort(groupId),
     itemTypeStore.listItemTypes(),
   ]);
@@ -75,7 +75,7 @@ export default async function GroupPage({ params }: PageProps) {
                   // eslint-disable-next-line @next/next/no-img-element -- small avatar, not worth next/image's setup here
                   <img src={m.avatarUrl} alt="" className="h-6 w-6 rounded-full" />
                 )}
-                <span>{m.name ?? m.email ?? m.clerkUserId}</span>
+                <span>{m.displayName}</span>
               </span>
               <span className="text-xs text-gray-500">{m.role}</span>
             </li>

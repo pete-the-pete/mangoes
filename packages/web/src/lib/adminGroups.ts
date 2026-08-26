@@ -1,5 +1,6 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import type { CohortRole, CohortStore } from "core";
+import { decorateCohortMembers } from "./cohortMemberIdentity";
 import { cohortStore } from "./db";
 
 export interface GroupMemberView {
@@ -19,30 +20,14 @@ export async function listGroupMembersForAdmin(
   groupId: string,
   store: CohortStore = cohortStore,
 ): Promise<GroupMemberView[]> {
-  const members = await store.listMembers(groupId);
-  if (members.length === 0) {
-    return [];
-  }
-
-  const clerk = await clerkClient();
-  const { data: users } = await clerk.users.getUserList({
-    userId: members.map((m) => m.clerkUserId),
-    limit: members.length,
-  });
-  const byId = new Map(users.map((u) => [u.id, u]));
-
-  // Membership rows are the source of truth for who is in the group; Clerk only
-  // decorates them. A row with no Clerk user still shows, still counts.
-  return members.map((member) => {
-    const user = byId.get(member.clerkUserId);
-    return {
-      clerkUserId: member.clerkUserId,
-      email: user?.primaryEmailAddress?.emailAddress ?? null,
-      name: user ? [user.firstName, user.lastName].filter(Boolean).join(" ") || null : null,
-      avatarUrl: user?.imageUrl ?? null,
-      role: member.role,
-    };
-  });
+  const rows = await decorateCohortMembers(groupId, store);
+  return rows.map(({ member, identity }) => ({
+    clerkUserId: member.clerkUserId,
+    email: identity.email,
+    name: identity.name,
+    avatarUrl: identity.avatarUrl,
+    role: member.role,
+  }));
 }
 
 export async function listPendingGroupInvites(
