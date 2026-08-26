@@ -6,6 +6,7 @@ import { groupTotal, subjectTotal } from "core";
 import { useSession } from "@/lib/sync/useSession";
 import { rejectionMessage } from "@/lib/appendOps";
 import type { MemberSessionJson } from "@/lib/memberSessions";
+import { initialTapToastBookkeeping, pickTapToast, type TapToastBookkeeping } from "@/lib/tapToast";
 import { TapTarget, pickLayout, layoutContainerClass } from "@/components/TapTarget";
 import { Leaderboard, type LeaderboardItemType, type LeaderboardParticipant } from "@/components/Leaderboard";
 import { SyncBadge } from "@/components/SyncBadge";
@@ -17,10 +18,21 @@ export interface SessionScreenProps {
   participants: LeaderboardParticipant[];
   /** The signed-in member's own id — a member always logs for themselves. */
   me: string;
+  /**
+   * True when `me` is not in `participants` — reachable only through the
+   * member API's platform-owner bypass (`requireCycleParticipant`'s
+   * superuser escape hatch), never for an actual participant. That bypass
+   * exists so an owner can look at any session, not so they can log into
+   * one they were never added to: a tap here would credit a subject with no
+   * leaderboard row, manufacturing an extra, unexplained contributor to
+   * Total. Read-only disables every tap target and the undo toast; the data
+   * itself stays fully visible.
+   */
+  readOnly: boolean;
 }
 
 interface ToastState {
-  /** Also the outbox clientEntryId `undo` targets — see the effect below. */
+  /** Also the outbox clientEntryId `undo` targets. */
   key: string;
   label: string;
 }
@@ -29,58 +41,36 @@ interface ToastState {
  * The screen the product exists for. Everything else in this milestone is
  * scaffolding for this one.
  */
-export function SessionScreen({ session, itemTypes, participants, me }: SessionScreenProps) {
+export function SessionScreen({ session, itemTypes, participants, me, readOnly }: SessionScreenProps) {
   const { state, displayed, log, undo } = useSession(session.id, me);
   const [toast, setToast] = useState<ToastState | null>(null);
-  const prevPendingIds = useRef<Set<string>>(new Set());
-  // Counts taps made through THIS component that are still owed a toast.
-  // `state.pending` also grows from causes that are NOT a fresh tap deserving
-  // a toast — most notably the initial `refreshPending()` on mount replaying
-  // a pre-existing offline queue from a past visit to this session. A boolean
-  // "have we seen the first pending snapshot yet" guard doesn't distinguish
-  // those cases: the mount's own `readAggregate` -> `refreshPending` ->
-  // `emit()` sequence fires the effect a SECOND time (first with the initial
-  // empty state, then again once the store's persisted pending list loads),
-  // and by then the guard would already be flipped, popping a toast (and
-  // arming Undo) for an old tap nobody just made. Counting only taps this
-  // component itself initiated avoids that regardless of how many times the
-  // effect fires before or after a real tap.
-  const expectedToasts = useRef(0);
+  const tapToastState = useRef<TapToastBookkeeping>(initialTapToastBookkeeping());
 
-  // `state.pending` only ever grows because THIS device queued a log or void
-  // (see client.ts: SSE/delta pulls only ever shrink it via dropConfirmed) —
-  // so a new "log" op appearing here is always this device's own doing, but
-  // not always a tap made just now (see expectedToasts above). Diffing
-  // against the previous render's ids finds WHICH op is new, without needing
-  // `log()` to hand back a clientEntryId it doesn't have; expectedToasts
-  // decides WHETHER that new op is owed a toast.
+  // See `pickTapToast`'s doc comment for why this can't be a simple
+  // "wasn't in the previous render's pending list" diff: an op can drop out
+  // of `state.pending` (via the SSE stream's dropConfirmed) before this
+  // device's own flush has durably settled it, then reappear via an
+  // unrelated refreshPending() — which must never look like a second fresh
+  // tap and re-arm Undo against an op the member already dealt with.
   useEffect(() => {
-    const currentIds = new Set(state.pending.map((op) => op.clientEntryId));
-    let latest: { clientEntryId: string; itemTypeKey: string } | undefined;
-    for (const op of state.pending) {
-      if (op.kind === "log" && op.itemTypeKey && !prevPendingIds.current.has(op.clientEntryId)) {
-        // Keep overwriting: a rapid double-tap queues two new ops in one
-        // render, and the toast should track the most recent tap, not the
-        // first one it happens to see.
-        latest = { clientEntryId: op.clientEntryId, itemTypeKey: op.itemTypeKey };
-      }
-    }
-    if (latest && expectedToasts.current > 0) {
-      expectedToasts.current -= 1;
-      const itemType = itemTypes.find((t) => t.key === latest!.itemTypeKey);
+    if (readOnly) return; // no taps possible in read-only mode; nothing to match
+    const { toast: matched, nextBookkeeping } = pickTapToast(state.pending, tapToastState.current);
+    tapToastState.current = nextBookkeeping;
+    if (matched) {
+      const itemType = itemTypes.find((t) => t.key === matched.itemTypeKey);
       setToast({
-        key: latest.clientEntryId,
+        key: matched.clientEntryId,
         label: itemType ? `${itemType.emoji} ${itemType.label} +1` : "Logged",
       });
     }
-    prevPendingIds.current = currentIds;
-  }, [state.pending, itemTypes]);
+  }, [state.pending, itemTypes, readOnly]);
 
   const closed = session.status === "closed";
+  const disabled = closed || readOnly;
   const layout = pickLayout(itemTypes.length);
 
   function handleTap(itemTypeKey: string) {
-    if (closed) return;
+    if (disabled) return;
     if (state.degraded) {
       // No offline queue to fall back on — POST directly. This tap won't
       // show an undo toast (there's no local outbox row to target) and the
@@ -107,13 +97,18 @@ export function SessionScreen({ session, itemTypes, participants, me }: SessionS
     // log()/undo() reject on enqueueLog's validation (empty itemTypeKey /
     // subjectUserId) — not expected here since itemTypeKey always comes from
     // this session's own catalog, but caught per the hook's contract.
-    // Incremented optimistically and decremented back on failure so a
-    // rejected tap (no new pending op ever appears) can't leave the counter
-    // permanently off by one, which would otherwise pop a toast for some
-    // unrelated later change to `state.pending`.
-    expectedToasts.current += 1;
+    // Credited optimistically and refunded on failure so a rejected tap (no
+    // new pending op ever appears) can't leave a dormant credit lying
+    // around for some unrelated later change to `state.pending` to spend.
+    tapToastState.current = {
+      ...tapToastState.current,
+      pendingTapCredits: tapToastState.current.pendingTapCredits + 1,
+    };
     void log(itemTypeKey, me).catch(() => {
-      expectedToasts.current -= 1;
+      tapToastState.current = {
+        ...tapToastState.current,
+        pendingTapCredits: tapToastState.current.pendingTapCredits - 1,
+      };
     });
   }
 
@@ -137,6 +132,12 @@ export function SessionScreen({ session, itemTypes, participants, me }: SessionS
         <SyncBadge pendingCount={state.pending.length} online={state.online} degraded={state.degraded} />
       </header>
 
+      {readOnly && (
+        <p className="rounded bg-gray-100 p-2 text-sm text-gray-600">
+          You&rsquo;re viewing this session without being a participant, so logging is turned off here.
+        </p>
+      )}
+
       {session.isOverdue && !closed && (
         <p className="rounded bg-amber-50 p-2 text-sm text-amber-800">
           This session&rsquo;s end time has passed — an admin can close it.
@@ -158,7 +159,7 @@ export function SessionScreen({ session, itemTypes, participants, me }: SessionS
             mine={subjectTotal(displayed, me, t.key)}
             group={groupTotal(displayed, t.key)}
             size={layout}
-            disabled={closed}
+            disabled={disabled}
             onTap={() => handleTap(t.key)}
           />
         ))}
@@ -166,7 +167,7 @@ export function SessionScreen({ session, itemTypes, participants, me }: SessionS
 
       <Leaderboard itemTypes={itemTypes} participants={participants} aggregate={displayed} me={me} />
 
-      {toast && (
+      {!readOnly && toast && (
         <UndoToast
           key={toast.key}
           label={toast.label}
