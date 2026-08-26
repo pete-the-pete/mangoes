@@ -85,8 +85,11 @@ export function AdminUserTable({
     }
   }
 
+  // overflow-hidden on the shell is load-bearing, not cosmetic: the sunburst
+  // below is 160vmax wide and absolutely positioned, so without it the page
+  // grows to the ray layer's width and the whole app scrolls sideways.
   return (
-    <PageShell width="wide" surface="ink-deep" className="relative gap-6">
+    <PageShell width="wide" surface="ink-deep" className="relative gap-6 overflow-hidden">
       {/* Screen 8's sunburst, bleeding off the top. */}
       <div
         aria-hidden="true"
