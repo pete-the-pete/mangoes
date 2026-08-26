@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+import { Card } from "./ui/Card";
+import { Label } from "./ui/Label";
+import { Pill } from "./ui/Pill";
+import { cn } from "./ui/cn";
 import { useSession } from "@/lib/sync/useSession";
 import { useMyEntries } from "@/lib/sync/useMyEntries";
 import type { EntryState } from "@/lib/sync/store";
@@ -22,14 +26,32 @@ export interface EntryListProps {
   readOnly?: boolean;
 }
 
-function formatTime(iso: string): string {
+/**
+ * HH:MM for the 52px time column of screen 6. Every entry here belongs to one
+ * session, so repeating the date per row spends the whole column on a value
+ * that rarely changes — but a session can run past midnight, so the full UTC
+ * timestamp stays on the <time> element rather than being thrown away.
+ */
+function formatClock(iso: string): string {
+  return `${iso.slice(11, 16)} UTC`;
+}
+
+function formatFull(iso: string): string {
   return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
 }
 
 const STATE_COPY: Record<EntryState, string> = {
-  pending: "Queued — not yet sent",
+  pending: "Queued",
   synced: "Logged",
-  voiding: "Removing…",
+  voiding: "Removing",
+};
+
+/** Screen 6's tag-badge colors: yellow for in-flight, cream for settled,
+ *  pink for anything being undone. */
+const STATE_TONE: Record<EntryState, "yellow" | "cream" | "pink"> = {
+  pending: "yellow",
+  synced: "cream",
+  voiding: "pink",
 };
 
 /**
@@ -65,47 +87,69 @@ export function EntryList({ sessionId, me, itemTypes, readOnly = false }: EntryL
 
   if (degraded) {
     return (
-      <p className="rounded bg-amber-100 p-3 text-sm text-amber-800">
-        Offline storage unavailable — your logs for this session aren&rsquo;t recorded locally.
-      </p>
+      <Card tone="yellow" border={3} radius={16} lift="xs" className="px-3 py-2.5">
+        <p className="text-12 text-ink leading-snug">
+          Offline storage unavailable — your logs for this session aren&rsquo;t recorded locally.
+        </p>
+      </Card>
     );
   }
 
   if (entries.length === 0) {
-    return <p className="text-sm text-gray-500">You haven&rsquo;t logged anything in this session yet.</p>;
+    return (
+      <Label size={11} as="p" className="text-rust">
+        Nothing logged in this session yet.
+      </Label>
+    );
   }
 
   return (
-    <ul className="flex flex-col gap-1">
+    <ul className="flex flex-col gap-2">
       {entries.map((entry) => {
         const itemType = itemTypes.find((t) => t.key === entry.itemTypeKey);
         const isVoiding = entry.state === "voiding";
         return (
-          <li
-            key={entry.clientEntryId}
-            className={`flex items-center justify-between gap-2 border-b border-gray-100 py-2 text-sm ${
-              isVoiding ? "text-gray-400 line-through" : "text-gray-900"
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              <span aria-hidden="true">{itemType?.emoji ?? "•"}</span>
-              <span>{itemType?.label ?? entry.itemTypeKey}</span>
-              <span className="text-xs text-gray-500">{formatTime(entry.occurredAt)}</span>
-            </span>
-            <span className="flex items-center gap-2">
-              <span className={`text-xs ${entry.state === "pending" ? "text-blue-600" : "text-gray-500"}`}>
-                {STATE_COPY[entry.state]}
-              </span>
-              {!isVoiding && !readOnly && (
-                <button
-                  type="button"
-                  onClick={() => void undo(entry.clientEntryId)}
-                  className="text-xs font-medium text-red-600 hover:underline"
+          <li key={entry.clientEntryId}>
+            <Card
+              tone="cream"
+              border={4}
+              radius={16}
+              lift={isVoiding ? "none" : "xs"}
+              className={cn("flex items-center justify-between gap-3 p-2.5", isVoiding && "sticker-off")}
+            >
+              <span className="flex min-w-0 items-center gap-2.5">
+                {/* Screen 6 puts the time in a fixed rust column so the
+                    descriptions line up down the list. */}
+                <Label
+                  size={9}
+                  as="time"
+                  dateTime={entry.occurredAt}
+                  title={formatFull(entry.occurredAt)}
+                  className="text-rust w-[58px] shrink-0 tabular-nums"
                 >
-                  Delete
-                </button>
-              )}
-            </span>
+                  {formatClock(entry.occurredAt)}
+                </Label>
+                <span aria-hidden="true" className="text-16">
+                  {itemType?.emoji ?? "•"}
+                </span>
+                <span className={cn("font-display text-18 min-w-0 truncate", isVoiding && "line-through")}>
+                  {itemType?.label ?? entry.itemTypeKey}
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                <Pill tone={STATE_TONE[entry.state]}>{STATE_COPY[entry.state]}</Pill>
+                {!isVoiding && !readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => void undo(entry.clientEntryId)}
+                    aria-label={`Delete ${itemType?.label ?? entry.itemTypeKey} logged at ${formatFull(entry.occurredAt)}`}
+                    className="font-display text-cream bg-hot-pink border-ink rounded-99 min-h-11 cursor-pointer border-3 border-solid px-3 text-14 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                  >
+                    Delete
+                  </button>
+                )}
+              </span>
+            </Card>
           </li>
         );
       })}

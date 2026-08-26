@@ -94,6 +94,13 @@
   --shadow-sticker-2xl: 0 10px 0 #10312b;
   /* Pressed: what a sticker button collapses to on :active. */
   --shadow-sticker-pressed: 0 5px 0 #10312b;
+  /* The tap target's underside. Two stacked layers in two different colors —
+     a rust "thickness" under the button and an ink outline around that — so
+     it cannot go through shadow-sticker-* + a color modifier, which sets one
+     color for the whole value. Hence its own token. */
+  --shadow-tap-target: 0 14px 0 #b8380b, 0 14px 0 8px #10312b;
+  --shadow-tap-target-pressed: 0 5px 0 #b8380b, 0 5px 0 8px #10312b;
+
   /* Diagonal — badges and headers sitting on the canvas. */
   --shadow-sticker-diag-sm: 5px 5px 0 #10312b;
   --shadow-sticker-diag-md: 6px 6px 0 #10312b;

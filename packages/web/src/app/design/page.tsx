@@ -7,6 +7,8 @@ import { SessionCard } from "@/components/SessionCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { StatTile } from "@/components/ui/StatTile";
 import { Interactive } from "./Interactive";
+import { Leaderboard } from "@/components/Leaderboard";
+import { SyncBadge } from "@/components/SyncBadge";
 
 /**
  * A living style guide for the design system in docs/design/.
@@ -158,6 +160,43 @@ export default function DesignPreview() {
             itemEmoji={["🍺"]}
           />
         </div>
+      </Section>
+
+      <Section title="Leaderboard (renders its own heading)">
+        <Leaderboard
+          itemTypes={[
+            { key: "mango", emoji: "🥭", label: "Mango" },
+            { key: "margarita", emoji: "🍹", label: "Margarita" },
+          ]}
+          participants={[
+            { clerkUserId: "u1", name: "Dave", imageUrl: "" },
+            { clerkUserId: "u2", name: "Marisol", imageUrl: "" },
+            { clerkUserId: "u3", name: "Sam", imageUrl: "" },
+            { clerkUserId: "u4", name: "Jo", imageUrl: "" },
+          ]}
+          me="u3"
+          aggregate={{
+            cursor: 0,
+            counts: {
+              u1: { mango: 19, margarita: 4 },
+              u2: { mango: 14, margarita: 7 },
+              u3: { mango: 12, margarita: 2 },
+              u4: { mango: 3, margarita: 0 },
+              // Untagged "for the group" entries — an admin action with no
+              // member-facing surface. This is why the total exceeds the rows.
+              __group: { mango: 23, margarita: 1 },
+            },
+          }}
+        />
+      </Section>
+
+      <Section title="Sync states">
+        <div className="flex flex-wrap items-start gap-3">
+          <SyncBadge pendingCount={0} online degraded={false} />
+          <SyncBadge pendingCount={3} online degraded={false} />
+          <SyncBadge pendingCount={2} online={false} degraded={false} />
+        </div>
+        <SyncBadge pendingCount={0} online degraded />
       </Section>
 
       <Section title="Avatars">

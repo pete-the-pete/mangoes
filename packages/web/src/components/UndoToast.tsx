@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { Card } from "./ui/Card";
+import { Label } from "./ui/Label";
 
 export interface UndoToastProps {
   label: string;
@@ -20,6 +22,11 @@ const VISIBLE_MS = 5000;
  * so the mount-once timer below is exactly "5s from this toast appearing" —
  * no dependency on `onDismiss`'s identity is needed since the whole
  * component is torn down and recreated for the next toast.
+ *
+ * The handoff has no undo design; screen 2's ink callback card is the nearest
+ * thing, so this borrows it. `animate-pop-in` rather than a motion component:
+ * the toast fires on every tap in the core loop, and a CSS animation costs
+ * nothing per tap.
  */
 export function UndoToast({ label, onUndo, onDismiss }: UndoToastProps) {
   useEffect(() => {
@@ -29,18 +36,29 @@ export function UndoToast({ label, onUndo, onDismiss }: UndoToastProps) {
   }, []);
 
   return (
-    <div className="fixed inset-x-0 bottom-4 z-10 mx-auto flex w-fit items-center gap-3 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg">
-      <span>{label}</span>
-      <button
-        type="button"
-        onClick={() => {
-          onUndo();
-          onDismiss();
-        }}
-        className="font-semibold text-blue-300 hover:underline"
+    <div
+      role="status"
+      className="animate-pop-in pointer-events-none fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-10 flex justify-center px-4"
+    >
+      <Card
+        tone="ink"
+        border={4}
+        radius={22}
+        lift="sm"
+        className="pointer-events-auto flex items-center gap-4 py-2 pr-2 pl-4"
       >
-        Undo
-      </button>
+        <span className="font-display text-cream text-19">{label}</span>
+        <button
+          type="button"
+          onClick={() => {
+            onUndo();
+            onDismiss();
+          }}
+          className="font-display text-ink bg-mango-yellow border-ink rounded-99 min-h-11 cursor-pointer border-3 border-solid px-4 text-17 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-cream"
+        >
+          Undo
+        </button>
+      </Card>
     </div>
   );
 }

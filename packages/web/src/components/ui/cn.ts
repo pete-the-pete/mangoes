@@ -83,6 +83,8 @@ const twMerge = extendTailwindMerge<"text-stroke" | "sticker-off">({
         "sticker-diag-md",
         "sticker-diag-lg",
         "sticker-diag-xl",
+      "tap-target",
+      "tap-target-pressed",
       ],
       animate: [
         "spin-rays",
