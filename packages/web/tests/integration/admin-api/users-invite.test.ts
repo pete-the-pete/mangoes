@@ -143,6 +143,107 @@ describe("POST /admin/api/users/invite", () => {
     expect(res.status).toBe(502);
   });
 
+  it("carries the invited name in metadata alongside the role", async () => {
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      status: 200,
+      role: "owner",
+      clerkUserId: "u1",
+    });
+    const createInvitation = vi.fn().mockResolvedValue({});
+    vi.mocked(clerkClient).mockResolvedValue({
+      invitations: { createInvitation },
+    } as never);
+
+    const res = await POST(
+      makeRequest({
+        email: "friend@gmail.com",
+        role: "member",
+        firstName: "  Ada  ",
+        lastName: "Lovelace",
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(createInvitation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        publicMetadata: {
+          intendedRole: "member",
+          intendedFirstName: "Ada",
+          intendedLastName: "Lovelace",
+        },
+      }),
+    );
+  });
+
+  it("omits the name keys entirely when no name was given", async () => {
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      status: 200,
+      role: "owner",
+      clerkUserId: "u1",
+    });
+    const createInvitation = vi.fn().mockResolvedValue({});
+    vi.mocked(clerkClient).mockResolvedValue({
+      invitations: { createInvitation },
+    } as never);
+
+    await POST(
+      makeRequest({ email: "friend@gmail.com", role: "member", firstName: "  " }),
+    );
+
+    expect(createInvitation).toHaveBeenCalledWith(
+      expect.objectContaining({ publicMetadata: { intendedRole: "member" } }),
+    );
+  });
+
+  it("rejects an over-long name without calling Clerk", async () => {
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      status: 200,
+      role: "owner",
+      clerkUserId: "u1",
+    });
+    const createInvitation = vi.fn();
+    vi.mocked(clerkClient).mockResolvedValue({
+      invitations: { createInvitation },
+    } as never);
+
+    const res = await POST(
+      makeRequest({
+        email: "friend@gmail.com",
+        role: "member",
+        lastName: "x".repeat(65),
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: "Last name must be 64 characters or less",
+    });
+    expect(createInvitation).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-string name", async () => {
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: true,
+      status: 200,
+      role: "owner",
+      clerkUserId: "u1",
+    });
+    const createInvitation = vi.fn();
+    vi.mocked(clerkClient).mockResolvedValue({
+      invitations: { createInvitation },
+    } as never);
+
+    const res = await POST(
+      makeRequest({ email: "friend@gmail.com", role: "member", firstName: 42 }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(createInvitation).not.toHaveBeenCalled();
+  });
+
   it("returns 400 for a malformed JSON body", async () => {
     vi.mocked(requireRole).mockResolvedValue({
       ok: true,

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/Label";
 import { PageShell } from "@/components/ui/PageShell";
 import { StatTile } from "@/components/ui/StatTile";
 import { cn } from "@/components/ui/cn";
+import { MAX_NAME_LENGTH, joinName } from "@/lib/userName";
 
 // `joined` is precomputed by the server component — see the note on JOINED_FMT
 // in page.tsx for why it isn't formatted here.
@@ -38,6 +39,16 @@ const ROLE_FILL: Record<Role | "pending", string> = {
   pending: "bg-mango-orange text-ink",
 };
 
+/**
+ * The roster's inline name inputs. Bare <input>s rather than TextField for the
+ * same reason the role control below is a bare <select>: TextField stacks a
+ * label above its control, which would double the height of every row in the
+ * list. The accessible name comes from aria-label instead.
+ */
+const NAME_INPUT =
+  "font-sans text-14 text-ink bg-white border-ink rounded-16 min-h-11 w-full min-w-[7rem] flex-1 border-3 border-solid px-2.5 py-1 outline-none " +
+  "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink";
+
 function roleLabel(role: Role | null): string {
   // No user_roles row yet: invited but never signed in, so role resolution
   // hasn't run for them. Say "Pending" rather than guess a role.
@@ -47,11 +58,18 @@ function roleLabel(role: Role | null): string {
 export function AdminUserTable({
   initialUsers,
   canManage,
+  canEditNames,
   currentUserId,
   groupCount,
 }: {
   initialUsers: AdminUserView[];
+  /** Owner-only: inviting and changing roles. */
   canManage: boolean;
+  /**
+   * Separate from `canManage` because the name route admits admins too —
+   * renaming carries no privilege, so it isn't owner-gated the way roles are.
+   */
+  canEditNames: boolean;
   currentUserId: string;
   groupCount: number;
 }) {
@@ -59,6 +77,9 @@ export function AdminUserTable({
   const [inviteOpen, setInviteOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState({ firstName: "", lastName: "" });
+  const [savingName, setSavingName] = useState(false);
 
   // Derived from the roster being rendered, never hardcoded — so an optimistic
   // role change moves the stat in the same paint as the badge.
@@ -83,6 +104,51 @@ export function AdminUserTable({
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       setError(body.error ?? "Failed to update role");
     }
+  }
+
+  function startEditingName(user: AdminUserView) {
+    setEditingNameId(user.id);
+    // Seeded from the two halves the row already carries — splitting `name` on
+    // a space would mangle anyone with two given names or a compound surname.
+    setNameDraft({ firstName: user.firstName, lastName: user.lastName });
+    setError(null);
+    setNotice(null);
+  }
+
+  async function handleNameSave(userId: string) {
+    setSavingName(true);
+    setError(null);
+    setNotice(null);
+
+    const res = await fetch(`/admin/api/users/${userId}/name`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nameDraft),
+    });
+
+    setSavingName(false);
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(body.error ?? "Failed to update the name");
+      return;
+    }
+
+    // Not optimistic, unlike the role change: the route trims and normalizes,
+    // so the row should show what was actually stored.
+    const saved = (await res.json()) as { firstName: string; lastName: string };
+    setUsers((rows) =>
+      rows.map((r) =>
+        r.id === userId
+          ? {
+              ...r,
+              firstName: saved.firstName,
+              lastName: saved.lastName,
+              name: joinName(saved.firstName, saved.lastName),
+            }
+          : r,
+      ),
+    );
+    setEditingNameId(null);
   }
 
   // overflow-hidden on the shell is load-bearing, not cosmetic: the sunburst
@@ -153,10 +219,69 @@ export function AdminUserTable({
                   u.role === "owner" && "border-mango-yellow",
                 )}
               >
-                <span className="flex min-w-0 items-center gap-2.5">
+                <span className="flex min-w-0 flex-1 items-center gap-2.5">
                   <Avatar src={u.avatarUrl || null} name={u.name ?? u.email ?? "?"} size={34} />
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="font-display text-19 min-w-0 truncate">{u.name ?? "—"}</span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    {editingNameId === u.id ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          void handleNameSave(u.id);
+                        }}
+                        className="flex flex-wrap items-center gap-1.5"
+                      >
+                        <input
+                          className={NAME_INPUT}
+                          aria-label={`First name for ${u.email ?? u.id}`}
+                          value={nameDraft.firstName}
+                          onChange={(e) =>
+                            setNameDraft((d) => ({ ...d, firstName: e.target.value }))
+                          }
+                          maxLength={MAX_NAME_LENGTH}
+                          placeholder="First"
+                          autoFocus
+                        />
+                        <input
+                          className={NAME_INPUT}
+                          aria-label={`Last name for ${u.email ?? u.id}`}
+                          value={nameDraft.lastName}
+                          onChange={(e) =>
+                            setNameDraft((d) => ({ ...d, lastName: e.target.value }))
+                          }
+                          maxLength={MAX_NAME_LENGTH}
+                          placeholder="Last"
+                        />
+                        <Button type="submit" size="sm" disabled={savingName}>
+                          {savingName ? "Saving…" : "Save"}
+                        </Button>
+                        <Button
+                          type="button"
+                          tone="secondary"
+                          size="sm"
+                          onClick={() => setEditingNameId(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </form>
+                    ) : canEditNames ? (
+                      // The whole point of the issue: someone invited before
+                      // the invite form asked for a name shows up blank, and
+                      // an admin can fill it in without waiting for them.
+                      <button
+                        type="button"
+                        onClick={() => startEditingName(u)}
+                        aria-label={`Edit the name for ${u.email ?? u.id}`}
+                        className={cn(
+                          "font-display text-19 min-w-0 truncate text-left underline-offset-4 hover:underline",
+                          "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ink",
+                          !u.name && "text-rust",
+                        )}
+                      >
+                        {u.name ?? "Add name"}
+                      </button>
+                    ) : (
+                      <span className="font-display text-19 min-w-0 truncate">{u.name ?? "—"}</span>
+                    )}
                     {/* Email is body copy, never Anton: it is verbatim user
                         data and Anton would render it uppercase. */}
                     <span className="text-11 text-rust min-w-0 truncate font-medium">

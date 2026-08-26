@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SessionCard } from "@/components/SessionCard";
+import { ButtonLink } from "@/components/ui/Button";
 import { PageShell } from "@/components/ui/PageShell";
 import { Label } from "@/components/ui/Label";
 import { SessionGroups } from "@/components/SessionGroups";
@@ -59,13 +60,25 @@ export function SessionChooser({ live, scheduled, recent }: SessionChooserProps)
         <Label size={11} as="p" className="text-rust">
           An admin will add you to a session.
         </Label>
+        {/* Load-bearing, not decoration: a freshly invited member with no
+            sessions lands here, and this is the only screen they can reach.
+            Without this link the person the name feature exists for has no
+            route to /account at all. */}
+        <ButtonLink href="/account" tone="secondary" size="sm">
+          Set your name
+        </ButtonLink>
       </PageShell>
     );
   }
 
   return (
     <PageShell>
-      <h1 className="font-display text-42">Choose a session</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-42">Choose a session</h1>
+        <ButtonLink href="/account" tone="secondary" size="sm">
+          Account
+        </ButtonLink>
+      </div>
       {error && (
         <Label size={11} as="p" role="alert" className="text-hot-pink">
           {error}

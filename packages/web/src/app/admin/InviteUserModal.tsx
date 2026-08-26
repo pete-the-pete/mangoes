@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { TextField, SelectField } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
+import { MAX_NAME_LENGTH } from "@/lib/userName";
 
 // Mirrors the server-side check in POST /admin/api/users/invite. Checked here
 // first so an invalid address never costs a network round-trip; the server
@@ -19,6 +20,8 @@ export function InviteUserModal({
   onInvited: (email: string) => void;
 }) {
   const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [role, setRole] = useState<"admin" | "member">("admin");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -36,7 +39,9 @@ export function InviteUserModal({
     const res = await fetch("/admin/api/users/invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: trimmed, role }),
+      // Name is optional — the invitee can set or change it themselves on
+      // /account, and whatever they choose there wins over this.
+      body: JSON.stringify({ email: trimmed, role, firstName, lastName }),
     });
 
     setSubmitting(false);
@@ -66,6 +71,28 @@ export function InviteUserModal({
           placeholder="friend@gmail.com"
           required
         />
+        <div className="flex flex-wrap gap-3">
+          <TextField
+            label="First name"
+            face="plain"
+            className="min-w-[9rem] flex-1"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            maxLength={MAX_NAME_LENGTH}
+            autoComplete="off"
+            placeholder="Ada"
+          />
+          <TextField
+            label="Last name"
+            face="plain"
+            className="min-w-[9rem] flex-1"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            maxLength={MAX_NAME_LENGTH}
+            autoComplete="off"
+            placeholder="Lovelace"
+          />
+        </div>
         <SelectField label="Role" value={role} onChange={(e) => setRole(e.target.value as "admin" | "member")}>
           {/* No "Super Admin" option: the invite route rejects role "owner".
               Owners are bootstrapped or promoted, never invited. */}

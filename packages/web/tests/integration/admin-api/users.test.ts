@@ -30,6 +30,8 @@ describe("GET /admin/api/users", () => {
         id: "u1",
         email: "pete@gmail.com",
         name: "Pete",
+        firstName: "Pete",
+        lastName: "",
         avatarUrl: "x",
         createdAt: "now",
         role: "owner",

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
 import { requireRole } from "@/lib/auth";
 import { isGmailAddress } from "@/lib/email";
+import { parseNameField } from "@/lib/userName";
 
 /**
  * The public origin this request arrived on, used to build the invitation's
@@ -30,7 +31,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: guard.error }, { status: guard.status });
   }
 
-  let body: { email?: unknown; role?: unknown };
+  let body: {
+    email?: unknown;
+    role?: unknown;
+    firstName?: unknown;
+    lastName?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -53,11 +59,32 @@ export async function POST(request: Request) {
     );
   }
 
+  const firstName = parseNameField(body.firstName, "First name");
+  if (!firstName.ok) {
+    return NextResponse.json({ error: firstName.error }, { status: 400 });
+  }
+  const lastName = parseNameField(body.lastName, "Last name");
+  if (!lastName.ok) {
+    return NextResponse.json({ error: lastName.error }, { status: 400 });
+  }
+
+  // createInvitation takes no name fields, so an admin-supplied name rides in
+  // metadata and applyPendingInviteName lands it on the user at first sign-in.
+  // Keys are omitted rather than nulled when blank: nothing pending, nothing
+  // for that pass to consume.
+  const publicMetadata: Record<string, string> = { intendedRole: role };
+  if (firstName.value) {
+    publicMetadata["intendedFirstName"] = firstName.value;
+  }
+  if (lastName.value) {
+    publicMetadata["intendedLastName"] = lastName.value;
+  }
+
   const clerk = await clerkClient();
   try {
     await clerk.invitations.createInvitation({
       emailAddress: email,
-      publicMetadata: { intendedRole: role },
+      publicMetadata,
       // Without this Clerk finishes the whole invite flow on its own Account
       // Portal and drops the invitee on `accounts.dev/default-redirect`, never
       // touching this app. Must be absolute: a relative path resolves against

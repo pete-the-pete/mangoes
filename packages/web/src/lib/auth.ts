@@ -2,6 +2,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { resolveRole, type Role, type UserRoleStore } from "core";
 import { userRoleStore } from "./db";
 import { joinPendingCohort } from "./pendingCohortInvite";
+import { applyPendingInviteName } from "./pendingInviteName";
 
 // One bootstrap admin, not a list. `core`'s resolveRole keeps a general
 // `bootstrapEmails: string[]` interface; the app is what decides there is
@@ -31,9 +32,25 @@ export async function getCurrentUserRole(
     intendedRoleFromInvitation,
   });
 
-  await joinPendingCohort({
+  const publicMetadata = (user.publicMetadata ?? {}) as Record<string, unknown>;
+
+  // Chained, not two independent writes off one snapshot: publicMetadata is
+  // replaced wholesale on every update, so the second consumer has to start
+  // from what the first actually left behind.
+  const remaining = await joinPendingCohort({
     clerkUserId: userId,
-    publicMetadata: (user.publicMetadata ?? {}) as Record<string, unknown>,
+    publicMetadata,
+  });
+
+  // Same pass, same reason as the group half above: this is the only request
+  // guaranteed to run for every user, so it is where an invitation's name gets
+  // applied. `user` is already in hand, so the "do they have a name already?"
+  // check costs no extra Clerk call.
+  await applyPendingInviteName({
+    clerkUserId: userId,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    publicMetadata: remaining,
   });
 
   return { clerkUserId: userId, role };

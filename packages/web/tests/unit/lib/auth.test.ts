@@ -8,10 +8,17 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 // Importing auth.ts pulls in @/lib/db, which would otherwise construct a real pg Pool.
 vi.mock("@/lib/db", () => ({ userRoleStore: undefined }));
-vi.mock("@/lib/pendingCohortInvite", () => ({ joinPendingCohort: vi.fn() }));
+// Passes the metadata straight through, standing in for the real helper's
+// "here is what is left pending after my clear" contract — getCurrentUserRole
+// feeds that return value to applyPendingInviteName.
+vi.mock("@/lib/pendingCohortInvite", () => ({
+  joinPendingCohort: vi.fn(async (input: { publicMetadata: unknown }) => input.publicMetadata),
+}));
+vi.mock("@/lib/pendingInviteName", () => ({ applyPendingInviteName: vi.fn() }));
 
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { joinPendingCohort } from "@/lib/pendingCohortInvite";
+import { applyPendingInviteName } from "@/lib/pendingInviteName";
 import { getCurrentUserRole, requireRole } from "@/lib/auth";
 
 function fakeStore(initial: Record<string, Role> = {}): UserRoleStore {
@@ -34,13 +41,21 @@ function fakeStore(initial: Record<string, Role> = {}): UserRoleStore {
   };
 }
 
-function signedInAs(email: string, publicMetadata: Record<string, unknown> = {}) {
+function signedInAs(
+  email: string,
+  publicMetadata: Record<string, unknown> = {},
+  name: { firstName: string | null; lastName: string | null } = {
+    firstName: null,
+    lastName: null,
+  },
+) {
   vi.mocked(auth).mockResolvedValue({ userId: "u1" } as never);
   vi.mocked(clerkClient).mockResolvedValue({
     users: {
       getUser: vi.fn().mockResolvedValue({
         primaryEmailAddress: { emailAddress: email },
         publicMetadata,
+        ...name,
       }),
     },
   } as never);
@@ -96,6 +111,7 @@ describe("getCurrentUserRole", () => {
     vi.mocked(auth).mockReset();
     vi.mocked(clerkClient).mockReset();
     vi.mocked(joinPendingCohort).mockReset();
+    vi.mocked(applyPendingInviteName).mockReset();
   });
 
   it("consumes a pending group invitation", async () => {
@@ -109,6 +125,25 @@ describe("getCurrentUserRole", () => {
     expect(joinPendingCohort).toHaveBeenCalledWith({
       clerkUserId: "u1",
       publicMetadata: { intendedRole: "member", intendedCohortId: "c1" },
+    });
+  });
+
+  // The name half of the same invitation, handed the user's current name so
+  // applyPendingInviteName can decide whether it is safe to apply.
+  it("consumes a pending invitation name, passing the user's current name", async () => {
+    signedInAs(
+      "friend@gmail.com",
+      { intendedRole: "member", intendedFirstName: "Ada" },
+      { firstName: null, lastName: "Lovelace" },
+    );
+
+    await getCurrentUserRole(fakeStore({ u1: "member" }));
+
+    expect(applyPendingInviteName).toHaveBeenCalledWith({
+      clerkUserId: "u1",
+      firstName: null,
+      lastName: "Lovelace",
+      publicMetadata: { intendedRole: "member", intendedFirstName: "Ada" },
     });
   });
 });
