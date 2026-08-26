@@ -23,12 +23,15 @@ export default function AdminDesignPreview() {
       <AdminNav currentRole="owner" />
       <AdminUserTable
         canManage
+        canEditNames
         currentUserId="u-self"
         groupCount={4}
         initialUsers={[
           {
             id: "u-self",
             name: "Pete",
+            firstName: "Pete",
+            lastName: "",
             email: "pete@gmail.com",
             avatarUrl: "",
             createdAt: "",
@@ -38,6 +41,8 @@ export default function AdminDesignPreview() {
           {
             id: "u2",
             name: "Dave",
+            firstName: "Dave",
+            lastName: "",
             email: "dave@gmail.com",
             avatarUrl: "",
             createdAt: "",
@@ -47,6 +52,8 @@ export default function AdminDesignPreview() {
           {
             id: "u3",
             name: "Marisol",
+            firstName: "Marisol",
+            lastName: "",
             email: "marisol@gmail.com",
             avatarUrl: "",
             createdAt: "",
@@ -56,6 +63,8 @@ export default function AdminDesignPreview() {
           {
             id: "u4",
             name: null,
+            firstName: "",
+            lastName: "",
             email: "tia@gmail.com",
             avatarUrl: "",
             createdAt: "",

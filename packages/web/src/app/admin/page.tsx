@@ -44,6 +44,8 @@ export default async function AdminPage() {
     <AdminUserTable
       initialUsers={rows}
       canManage={current.role === "owner"}
+      // Admins too: PATCH .../name admits both, since a rename grants nothing.
+      canEditNames={current.role === "owner" || current.role === "admin"}
       currentUserId={current.clerkUserId}
       groupCount={groupCount}
     />

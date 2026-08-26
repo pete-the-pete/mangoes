@@ -11,6 +11,7 @@ import { TextField } from "@/components/ui/Field";
 import { Label } from "@/components/ui/Label";
 import { Pill } from "@/components/ui/Pill";
 import { cn } from "@/components/ui/cn";
+import { MAX_NAME_LENGTH } from "@/lib/userName";
 
 type CohortRole = GroupMemberView["role"];
 
@@ -36,6 +37,8 @@ export function MembersPanel({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [isSubmitting, setSubmitting] = useState(false);
 
   // Every mutation ends in router.refresh(): the server component owns this
@@ -102,12 +105,16 @@ export function MembersPanel({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: trimmed }),
+          // Ignored by the route when this email already has an account —
+          // adding someone to a group is not a licence to rename them.
+          body: JSON.stringify({ email: trimmed, firstName, lastName }),
         },
         "Could not add that person",
       );
       if (ok) {
         setEmail("");
+        setFirstName("");
+        setLastName("");
         setNotice(
           body["added"]
             ? `${trimmed} was added to the group.`
@@ -248,6 +255,28 @@ export function MembersPanel({
             type="email"
             required
             placeholder="friend@gmail.com"
+          />
+          {/* Optional, and only used when this email has no account yet: the
+              name rides on the invitation and lands at first sign-in. */}
+          <TextField
+            label="First name"
+            face="plain"
+            className="min-w-[8rem] flex-1"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            maxLength={MAX_NAME_LENGTH}
+            autoComplete="off"
+            placeholder="Ada"
+          />
+          <TextField
+            label="Last name"
+            face="plain"
+            className="min-w-[8rem] flex-1"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            maxLength={MAX_NAME_LENGTH}
+            autoComplete="off"
+            placeholder="Lovelace"
           />
           <Button type="submit" disabled={isSubmitting}>
             Add

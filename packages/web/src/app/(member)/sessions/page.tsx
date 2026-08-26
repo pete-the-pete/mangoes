@@ -4,6 +4,7 @@ import { cycleStore, itemTypeStore } from "@/lib/db";
 import { splitSessionListItems } from "@/lib/memberSessions";
 import { SessionCard } from "@/components/SessionCard";
 import { SessionGroups } from "@/components/SessionGroups";
+import { ButtonLink } from "@/components/ui/Button";
 import { PageShell } from "@/components/ui/PageShell";
 import { Label } from "@/components/ui/Label";
 
@@ -30,7 +31,15 @@ export default async function SessionsPage() {
 
   return (
     <PageShell>
-      <h1 className="font-display text-42">Sessions</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-42">Sessions</h1>
+        {/* The only member-facing route to /account: members have no
+            persistent nav, and this is the list screen they always pass
+            through. */}
+        <ButtonLink href="/account" tone="secondary" size="sm">
+          Account
+        </ButtonLink>
+      </div>
       {isEmpty && (
         <Label size={11} as="p" className="text-rust">
           No sessions yet — an admin will add you to one.

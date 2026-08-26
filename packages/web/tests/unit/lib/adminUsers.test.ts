@@ -54,6 +54,10 @@ describe("listUsersForAdmin", () => {
         id: "u1",
         email: "pete@gmail.com",
         name: "Pete L",
+        // Kept alongside the joined name so the roster's inline edit can seed
+        // its two fields without splitting `name` on a guess.
+        firstName: "Pete",
+        lastName: "L",
         avatarUrl: "https://example.com/a.png",
         createdAt: new Date(1700000000000).toISOString(),
         role: "owner",

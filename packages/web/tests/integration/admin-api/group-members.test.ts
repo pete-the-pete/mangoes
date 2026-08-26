@@ -22,7 +22,7 @@ import {
 } from "@/app/admin/api/groups/[groupId]/members/[clerkUserId]/route";
 
 const clerkMock = {
-  users: { getUserList: vi.fn() },
+  users: { getUserList: vi.fn(), updateUser: vi.fn() },
   invitations: { createInvitation: vi.fn(), revokeInvitation: vi.fn() },
 };
 
@@ -63,6 +63,7 @@ beforeEach(() => {
   vi.mocked(cohortStore.removeMember).mockReset();
   vi.mocked(userRoleStore.getRole).mockReset();
   clerkMock.users.getUserList.mockReset();
+  clerkMock.users.updateUser.mockReset();
   clerkMock.invitations.createInvitation.mockReset();
   clerkMock.invitations.revokeInvitation.mockReset();
   vi.mocked(clerkClient).mockResolvedValue(clerkMock as never);
@@ -92,6 +93,50 @@ describe("POST /admin/api/groups/:groupId/members", () => {
       publicMetadata: { intendedRole: "member", intendedCohortId: "c1" },
     });
     expect(cohortStore.addMember).not.toHaveBeenCalled();
+  });
+
+  it("carries the invited name in metadata", async () => {
+    asGroupAdmin();
+    clerkMock.users.getUserList.mockResolvedValue({ data: [] });
+    await POST(
+      addRequest({ email: "new@gmail.com", firstName: "Ada", lastName: "Lovelace" }),
+      groupParams,
+    );
+    expect(clerkMock.invitations.createInvitation).toHaveBeenCalledWith({
+      emailAddress: "new@gmail.com",
+      publicMetadata: {
+        intendedRole: "member",
+        intendedCohortId: "c1",
+        intendedFirstName: "Ada",
+        intendedLastName: "Lovelace",
+      },
+    });
+  });
+
+  // A group admin adding someone who already has an account is not allowed to
+  // rename them — the name only ever rides on an invitation.
+  it("ignores a name when the user already exists", async () => {
+    asGroupAdmin();
+    clerkMock.users.getUserList.mockResolvedValue({ data: [{ id: "u2" }] });
+    const res = await POST(
+      addRequest({ email: "friend@gmail.com", firstName: "Wrong" }),
+      groupParams,
+    );
+    expect(res.status).toBe(201);
+    expect(clerkMock.users.updateUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects an over-long name before calling Clerk", async () => {
+    asGroupAdmin();
+    const res = await POST(
+      addRequest({ email: "new@gmail.com", firstName: "x".repeat(65) }),
+      groupParams,
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: "First name must be 64 characters or less",
+    });
+    expect(clerkMock.users.getUserList).not.toHaveBeenCalled();
   });
 
   it("rejects a non-gmail address before calling Clerk", async () => {
