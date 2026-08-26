@@ -43,7 +43,13 @@ const SIZE = {
  * anything tappable wraps this in a Button rather than becoming one, so the
  * 44px hit area comes from the control, not the badge.
  */
-export function Pill({ tone = "cream", size = "sm", off = false, className, children }: PillProps) {
+export function Pill({
+  tone = "cream",
+  size = "sm",
+  off = false,
+  className,
+  children,
+}: PillProps) {
   return (
     <span
       className={cn(

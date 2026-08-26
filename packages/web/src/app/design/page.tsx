@@ -4,6 +4,9 @@ import { Card } from "@/components/ui/Card";
 import { Label } from "@/components/ui/Label";
 import { Pill } from "@/components/ui/Pill";
 import { SessionCard } from "@/components/SessionCard";
+import { Avatar } from "@/components/ui/Avatar";
+import { StatTile } from "@/components/ui/StatTile";
+import { Interactive } from "./Interactive";
 
 /**
  * A living style guide for the design system in docs/design/.
@@ -156,6 +159,27 @@ export default function DesignPreview() {
           />
         </div>
       </Section>
+
+      <Section title="Avatars">
+        <div className="flex flex-wrap items-center gap-3">
+          <Avatar name="Dave" size={44} />
+          <Avatar name="Marisol" size={38} />
+          <Avatar name="Sam" size={36} />
+          <Avatar name="Jo" size={34} />
+          <Avatar name="Tia R." size={28} />
+          <Avatar name={null} size={34} />
+        </div>
+      </Section>
+
+      <Section title="Stat tiles">
+        <div className="grid grid-cols-3 gap-3">
+          <StatTile value={7} label="Users" tone="yellow" />
+          <StatTile value={2} label="Admins" tone="turquoise" />
+          <StatTile value={4} label="Groups" tone="pink" />
+        </div>
+      </Section>
+
+      <Interactive />
 
       <Section title="Motion">
         <div className="flex flex-wrap items-center gap-8">
