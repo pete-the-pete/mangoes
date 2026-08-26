@@ -33,36 +33,46 @@ export function SessionScreen({ session, itemTypes, participants, me }: SessionS
   const { state, displayed, log, undo } = useSession(session.id, me);
   const [toast, setToast] = useState<ToastState | null>(null);
   const prevPendingIds = useRef<Set<string>>(new Set());
-  const hasSeenFirstPending = useRef(false);
+  // Counts taps made through THIS component that are still owed a toast.
+  // `state.pending` also grows from causes that are NOT a fresh tap deserving
+  // a toast — most notably the initial `refreshPending()` on mount replaying
+  // a pre-existing offline queue from a past visit to this session. A boolean
+  // "have we seen the first pending snapshot yet" guard doesn't distinguish
+  // those cases: the mount's own `readAggregate` -> `refreshPending` ->
+  // `emit()` sequence fires the effect a SECOND time (first with the initial
+  // empty state, then again once the store's persisted pending list loads),
+  // and by then the guard would already be flipped, popping a toast (and
+  // arming Undo) for an old tap nobody just made. Counting only taps this
+  // component itself initiated avoids that regardless of how many times the
+  // effect fires before or after a real tap.
+  const expectedToasts = useRef(0);
 
   // `state.pending` only ever grows because THIS device queued a log or void
   // (see client.ts: SSE/delta pulls only ever shrink it via dropConfirmed) —
-  // so a new "log" op appearing here is always this device's own tap, never
-  // another participant's. Diffing against the previous render's ids finds
-  // it without needing `log()` to hand back a clientEntryId it doesn't have.
-  // Guarded on `hasSeenFirstPending` so a pre-existing offline queue from a
-  // past session doesn't pop a toast on mount.
+  // so a new "log" op appearing here is always this device's own doing, but
+  // not always a tap made just now (see expectedToasts above). Diffing
+  // against the previous render's ids finds WHICH op is new, without needing
+  // `log()` to hand back a clientEntryId it doesn't have; expectedToasts
+  // decides WHETHER that new op is owed a toast.
   useEffect(() => {
     const currentIds = new Set(state.pending.map((op) => op.clientEntryId));
-    if (hasSeenFirstPending.current) {
-      let latest: { clientEntryId: string; itemTypeKey: string } | undefined;
-      for (const op of state.pending) {
-        if (op.kind === "log" && op.itemTypeKey && !prevPendingIds.current.has(op.clientEntryId)) {
-          // Keep overwriting: a rapid double-tap queues two new ops in one
-          // render, and the toast should track the most recent tap, not the
-          // first one it happens to see.
-          latest = { clientEntryId: op.clientEntryId, itemTypeKey: op.itemTypeKey };
-        }
-      }
-      if (latest) {
-        const itemType = itemTypes.find((t) => t.key === latest!.itemTypeKey);
-        setToast({
-          key: latest.clientEntryId,
-          label: itemType ? `${itemType.emoji} ${itemType.label} +1` : "Logged",
-        });
+    let latest: { clientEntryId: string; itemTypeKey: string } | undefined;
+    for (const op of state.pending) {
+      if (op.kind === "log" && op.itemTypeKey && !prevPendingIds.current.has(op.clientEntryId)) {
+        // Keep overwriting: a rapid double-tap queues two new ops in one
+        // render, and the toast should track the most recent tap, not the
+        // first one it happens to see.
+        latest = { clientEntryId: op.clientEntryId, itemTypeKey: op.itemTypeKey };
       }
     }
-    hasSeenFirstPending.current = true;
+    if (latest && expectedToasts.current > 0) {
+      expectedToasts.current -= 1;
+      const itemType = itemTypes.find((t) => t.key === latest!.itemTypeKey);
+      setToast({
+        key: latest.clientEntryId,
+        label: itemType ? `${itemType.emoji} ${itemType.label} +1` : "Logged",
+      });
+    }
     prevPendingIds.current = currentIds;
   }, [state.pending, itemTypes]);
 
@@ -97,17 +107,32 @@ export function SessionScreen({ session, itemTypes, participants, me }: SessionS
     // log()/undo() reject on enqueueLog's validation (empty itemTypeKey /
     // subjectUserId) — not expected here since itemTypeKey always comes from
     // this session's own catalog, but caught per the hook's contract.
-    void log(itemTypeKey, me).catch(() => {});
+    // Incremented optimistically and decremented back on failure so a
+    // rejected tap (no new pending op ever appears) can't leave the counter
+    // permanently off by one, which would otherwise pop a toast for some
+    // unrelated later change to `state.pending`.
+    expectedToasts.current += 1;
+    void log(itemTypeKey, me).catch(() => {
+      expectedToasts.current -= 1;
+    });
   }
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 pb-20">
       <header className="flex items-center justify-between gap-2">
-        <div>
+        <div className="flex flex-col gap-0.5">
           <h1 className="text-lg font-semibold">{session.name}</h1>
-          <Link href="/sessions" className="text-xs text-gray-500 hover:underline">
-            Switch session
-          </Link>
+          <nav className="flex gap-3 text-xs text-gray-500">
+            <Link href="/sessions" className="hover:underline">
+              Switch session
+            </Link>
+            <Link href={`/sessions/${session.id}/logs`} className="hover:underline">
+              Your logs
+            </Link>
+            <Link href={`/groups/${session.groupId}`} className="hover:underline">
+              Group
+            </Link>
+          </nav>
         </div>
         <SyncBadge pendingCount={state.pending.length} online={state.online} degraded={state.degraded} />
       </header>
