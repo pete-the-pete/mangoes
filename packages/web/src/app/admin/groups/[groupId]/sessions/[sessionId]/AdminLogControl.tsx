@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SelectField } from "@/components/ui/Field";
 import { Label } from "@/components/ui/Label";
 import { Pill } from "@/components/ui/Pill";
 import { cn } from "@/components/ui/cn";
+import { useRefreshingAction } from "@/lib/useRefreshingAction";
 
 export interface ItemTypeOption {
   key: string;
@@ -73,11 +73,10 @@ function formatUtc(iso: string): string {
 }
 
 export function AdminLogControl(props: AdminLogControlProps) {
-  const router = useRouter();
+  const { busy, run } = useRefreshingAction();
   const [itemTypeKey, setItemTypeKey] = useState(props.itemTypes[0]?.key ?? "");
   const [subjectChoice, setSubjectChoice] = useState<string>(GROUP_OPTION);
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setSubmitting] = useState(false);
   const [pending, setPending] = useState<PendingLog[]>([]);
   const [voidingIds, setVoidingIds] = useState<Set<string>>(new Set());
   const prevEntryCount = useRef(props.entries.length);
@@ -100,7 +99,7 @@ export function AdminLogControl(props: AdminLogControlProps) {
     prevEntryCount.current = props.entries.length;
   }, [props.entries.length]);
 
-  async function submitLog(event: React.FormEvent) {
+  function submitLog(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
     if (!itemTypeKey) {
@@ -110,8 +109,7 @@ export function AdminLogControl(props: AdminLogControlProps) {
     const subjectUserId = subjectChoice === GROUP_OPTION ? null : subjectChoice;
     const tempId = crypto.randomUUID();
     setPending((current) => [...current, { tempId, itemTypeKey, subjectUserId }]);
-    setSubmitting(true);
-    try {
+    run(async () => {
       const res = await fetch(`/admin/api/groups/${props.groupId}/sessions/${props.sessionId}/entries`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,32 +119,31 @@ export function AdminLogControl(props: AdminLogControlProps) {
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? "Could not log that");
         setPending((current) => current.filter((p) => p.tempId !== tempId));
-        return;
       }
-      router.refresh();
-    } finally {
-      setSubmitting(false);
-    }
+      // The refresh is the hook's, and it runs inside the same transition, so
+      // the button stays busy until the new row is on screen. It used to clear
+      // in a `finally` that ran while the server was still re-rendering.
+    });
   }
 
-  async function voidEntry(entryId: string) {
+  function voidEntry(entryId: string) {
     setError(null);
     setVoidingIds((current) => new Set(current).add(entryId));
-    const res = await fetch(
-      `/admin/api/groups/${props.groupId}/sessions/${props.sessionId}/entries/${entryId}/void`,
-      { method: "POST" },
-    );
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? "Could not remove that log");
-      setVoidingIds((current) => {
-        const next = new Set(current);
-        next.delete(entryId);
-        return next;
-      });
-      return;
-    }
-    router.refresh();
+    run(async () => {
+      const res = await fetch(
+        `/admin/api/groups/${props.groupId}/sessions/${props.sessionId}/entries/${entryId}/void`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "Could not remove that log");
+        setVoidingIds((current) => {
+          const next = new Set(current);
+          next.delete(entryId);
+          return next;
+        });
+      }
+    });
   }
 
   if (!props.canManage) {
@@ -190,7 +187,7 @@ export function AdminLogControl(props: AdminLogControlProps) {
             </option>
           ))}
         </SelectField>
-        <Button type="submit" tone="accent" disabled={isSubmitting || props.itemTypes.length === 0}>
+        <Button type="submit" tone="accent" disabled={busy || props.itemTypes.length === 0}>
           Log it
         </Button>
       </form>

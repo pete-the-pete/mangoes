@@ -1,31 +1,32 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ItemType } from "core";
 import { Card } from "@/components/ui/Card";
 import { Label } from "@/components/ui/Label";
 import { cn } from "@/components/ui/cn";
+import { useRefreshingAction } from "@/lib/useRefreshingAction";
 
 export function ItemTypeTable({ initialItemTypes }: { initialItemTypes: ItemType[] }) {
-  const router = useRouter();
+  const { busy, run } = useRefreshingAction();
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
 
-  async function patch(key: string, update: { enabled?: boolean; label?: string }) {
-    setError(null);
-    const res = await fetch(`/admin/api/item-types/${key}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(update),
+  function patch(key: string, update: { enabled?: boolean; label?: string }) {
+    run(async () => {
+      setError(null);
+      const res = await fetch(`/admin/api/item-types/${key}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(update),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(body.error ?? "Could not update the item type");
+      }
+      // The refresh happens either way, inside the transition: on success it
+      // shows the write, on failure it undoes the optimistic input state.
     });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(body.error ?? "Could not update the item type");
-    }
-    // Refresh either way: the server component owns this list, so on success it
-    // shows the write and on failure it undoes the optimistic input state.
-    router.refresh();
   }
 
   const needle = filter.trim().toLowerCase();
@@ -87,6 +88,10 @@ export function ItemTypeTable({ initialItemTypes }: { initialItemTypes: ItemType
                   "[&>td:first-child]:rounded-l-16 [&>td:first-child]:border-l-3",
                   "[&>td:last-child]:rounded-r-16 [&>td:last-child]:border-r-3",
                   !item.enabled && "opacity-55",
+                  // Every row goes quiet during a write: the table is re-rendered
+                  // wholesale by the refresh, so a second edit mid-flight would
+                  // be computed against a list that is about to be replaced.
+                  busy && "pointer-events-none opacity-40",
                 )}
               >
                 <td className="bg-cream px-2 py-1.5 text-22">{item.emoji}</td>
@@ -94,6 +99,7 @@ export function ItemTypeTable({ initialItemTypes }: { initialItemTypes: ItemType
                   <input
                     defaultValue={item.label}
                     maxLength={40}
+                    disabled={busy}
                     aria-label={`Label for ${item.key}`}
                     // Saved on blur rather than per keystroke: one PATCH per edit,
                     // not one per character.
@@ -112,6 +118,7 @@ export function ItemTypeTable({ initialItemTypes }: { initialItemTypes: ItemType
                   <input
                     type="checkbox"
                     checked={item.enabled}
+                    disabled={busy}
                     aria-label={`${item.label} enabled`}
                     onChange={(e) => patch(item.key, { enabled: e.target.checked })}
                     className="border-ink accent-mango-yellow size-7 cursor-pointer rounded-8 border-3 border-solid"

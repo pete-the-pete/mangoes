@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { TextField } from "@/components/ui/Field";
 import { Label } from "@/components/ui/Label";
 import { cn } from "@/components/ui/cn";
+import { useRefreshingAction } from "@/lib/useRefreshingAction";
 
 export interface ItemTypeOption {
   key: string;
@@ -59,9 +60,9 @@ export function SessionForm(props: SessionFormProps) {
     props.session?.participantIds ?? props.members.map((m) => m.clerkUserId),
   );
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setSubmitting] = useState(false);
+  const { busy, run } = useRefreshingAction();
 
-  async function submit(event: React.FormEvent) {
+  function submit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
 
@@ -76,8 +77,7 @@ export function SessionForm(props: SessionFormProps) {
       return;
     }
 
-    setSubmitting(true);
-    try {
+    run(async () => {
       const url = isEdit
         ? `/admin/api/groups/${props.groupId}/sessions/${props.session!.id}`
         : `/admin/api/groups/${props.groupId}/sessions`;
@@ -102,25 +102,26 @@ export function SessionForm(props: SessionFormProps) {
         return;
       }
       const body = await res.json();
+      // The push navigates; the hook's refresh then lands on the new route.
+      // Both inside the transition, so the button stays busy until the
+      // destination is actually rendered rather than re-enabling mid-navigation.
       router.push(`/admin/groups/${props.groupId}/sessions/${body.session.id}`);
-      router.refresh();
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
-  async function setClosed(closed: boolean) {
-    setError(null);
-    const action = closed ? "close" : "reopen";
-    const res = await fetch(
-      `/admin/api/groups/${props.groupId}/sessions/${props.session!.id}/${action}`,
-      { method: "POST" },
-    );
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? `Could not ${action} the session`);
-    }
-    router.refresh();
+  function setClosed(closed: boolean) {
+    run(async () => {
+      setError(null);
+      const action = closed ? "close" : "reopen";
+      const res = await fetch(
+        `/admin/api/groups/${props.groupId}/sessions/${props.session!.id}/${action}`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? `Could not ${action} the session`);
+      }
+    });
   }
 
   return (
@@ -251,16 +252,16 @@ export function SessionForm(props: SessionFormProps) {
 
       {props.canManage && (
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" tone="go" size="lg" disabled={isSubmitting}>
-            {isEdit ? "Save" : "Go live 🚀"}
+          <Button type="submit" tone="go" size="lg" disabled={busy}>
+            {busy ? "Saving\u2026" : isEdit ? "Save" : "Go live 🚀"}
           </Button>
           {isEdit && props.session!.status !== "closed" && (
-            <Button type="button" tone="destructive" onClick={() => setClosed(true)}>
+            <Button type="button" tone="destructive" disabled={busy} onClick={() => setClosed(true)}>
               End session
             </Button>
           )}
           {isEdit && props.session!.status === "closed" && (
-            <Button type="button" tone="accent" onClick={() => setClosed(false)}>
+            <Button type="button" tone="accent" disabled={busy} onClick={() => setClosed(false)}>
               Reopen session
             </Button>
           )}

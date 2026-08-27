@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import { NewGroupModal } from "./NewGroupModal";
@@ -8,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Label } from "@/components/ui/Label";
 import { Pill } from "@/components/ui/Pill";
+import { useRefreshingAction } from "@/lib/useRefreshingAction";
 
 export interface GroupView {
   id: string;
@@ -17,14 +17,14 @@ export interface GroupView {
 }
 
 export function GroupsTable({ initialGroups }: { initialGroups: GroupView[] }) {
-  const router = useRouter();
+  const { busy, run } = useRefreshingAction();
   const [isModalOpen, setModalOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <Button tone="primary" size="sm" onClick={() => setModalOpen(true)}>
-          New group
+        <Button tone="primary" size="sm" disabled={busy} onClick={() => setModalOpen(true)}>
+          {busy ? "Adding\u2026" : "New group"}
         </Button>
       </div>
 
@@ -72,8 +72,10 @@ export function GroupsTable({ initialGroups }: { initialGroups: GroupView[] }) {
           onCreated={() => {
             setModalOpen(false);
             // The server component owns the list; re-render it rather than
-            // duplicating group state on the client.
-            router.refresh();
+            // duplicating group state on the client. Wrapped so the button
+            // stays busy until the new row is actually on screen — the modal
+            // closes instantly, and without this there is nothing in between.
+            run(() => {});
           }}
         />
       )}
