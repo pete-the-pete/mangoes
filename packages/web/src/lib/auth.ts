@@ -1,6 +1,8 @@
+import { cache } from "react";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { resolveRole, type Role, type UserRoleStore } from "core";
 import { userRoleStore } from "./db";
+import { hasPendingInvite } from "./hasPendingInvite";
 import { joinPendingCohort } from "./pendingCohortInvite";
 import { applyPendingInviteName } from "./pendingInviteName";
 
@@ -10,14 +12,53 @@ import { applyPendingInviteName } from "./pendingInviteName";
 const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL?.trim() ?? "";
 const BOOTSTRAP_EMAILS = SUPER_ADMIN_EMAIL ? [SUPER_ADMIN_EMAIL] : [];
 
-export async function getCurrentUserRole(
+/**
+ * The signed-in user's id and platform role.
+ *
+ * Wrapped in React's `cache()` so it is computed once per request no matter how
+ * many times it is called. That matters because `app/admin/layout.tsx` calls it
+ * and then so does every admin page underneath — before this, that was two
+ * identical Clerk round trips for one render.
+ *
+ * The `store` parameter is part of the cache key. Every real caller uses the
+ * default; tests pass their own and get their own entry, which is what you want.
+ */
+export const getCurrentUserRole = cache(async function getCurrentUserRole(
   store: UserRoleStore = userRoleStore,
 ): Promise<{ clerkUserId: string; role: Role } | null> {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) {
     return null;
   }
 
+  // The fast path, and the reason this function stopped being the app's biggest
+  // latency cost. `auth()` above resolves the user from the signed session
+  // cookie with no network call; `getRole` is one indexed primary-key lookup.
+  // Together they answer the question for every request after a user's first,
+  // where previously every request paid a Clerk Backend API round trip — 16 call
+  // sites, including `cycleAuth.ts`, which guards every logged mango.
+  //
+  // Gated on the session token carrying `metadata` (see src/types/clerk.d.ts).
+  // If the claim is absent the token predates the session-token template change,
+  // or the template was never applied — either way we cannot tell "no pending
+  // invite" from "no information", so we fall through to the authoritative path
+  // below. That makes this safe to deploy before the Dashboard change: it stays
+  // correct, it just isn't faster yet.
+  const claimedMetadata = sessionClaims?.metadata;
+  if (claimedMetadata !== undefined && !hasPendingInvite(claimedMetadata)) {
+    const existing = await store.getRole(userId);
+    if (existing) {
+      return { clerkUserId: userId, role: existing };
+    }
+  }
+
+  // Slow path: first sight of this user, or the token says an invitation is
+  // still waiting to be consumed. Read the authoritative metadata from Clerk.
+  //
+  // A stale token claim can only ever send us here unnecessarily — it can never
+  // skip work, because the fast path above requires the claim to say nothing is
+  // pending AND a role row to already exist. So one extra round trip is the
+  // worst case; a wrong write is not reachable.
   const clerk = await clerkClient();
   const user = await clerk.users.getUser(userId);
   const email = user.primaryEmailAddress?.emailAddress ?? "";
@@ -54,7 +95,7 @@ export async function getCurrentUserRole(
   });
 
   return { clerkUserId: userId, role };
-}
+});
 
 export interface RoleGuardResult {
   ok: boolean;
