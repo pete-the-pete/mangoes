@@ -56,3 +56,18 @@ describe("cn — type scale", () => {
     expect(cn("text-ink text-cream")).toBe("text-cream");
   });
 });
+
+describe("cn — custom @utility groups", () => {
+  it("keeps skeleton-fill alongside the animation that drives it", () => {
+    // The two always ship together on a Skeleton: the utility paints the 80px
+    // striped tile, `animate-shimmer` slides it. If `skeleton-fill` were not
+    // registered as its own class group, twMerge could treat it as a background
+    // utility and drop it against a `bg-*` override, leaving a static bar.
+    expect(cn("skeleton-fill animate-shimmer")).toBe("skeleton-fill animate-shimmer");
+    expect(cn("bg-cream skeleton-fill")).toBe("bg-cream skeleton-fill");
+  });
+
+  it("still resolves shimmer against another animation", () => {
+    expect(cn("animate-shimmer animate-pop-in")).toBe("animate-pop-in");
+  });
+});

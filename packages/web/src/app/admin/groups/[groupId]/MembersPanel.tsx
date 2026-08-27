@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { GroupMemberView, PendingInviteView } from "@/lib/adminGroups";
 import { isGmailAddress } from "@/lib/email";
@@ -12,6 +11,7 @@ import { Label } from "@/components/ui/Label";
 import { Pill } from "@/components/ui/Pill";
 import { cn } from "@/components/ui/cn";
 import { MAX_NAME_LENGTH } from "@/lib/userName";
+import { useRefreshingAction } from "@/lib/useRefreshingAction";
 
 type CohortRole = GroupMemberView["role"];
 
@@ -33,16 +33,17 @@ export function MembersPanel({
   canManage: boolean;
   currentUserId: string;
 }) {
-  const router = useRouter();
+  const { busy, run } = useRefreshingAction();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [isSubmitting, setSubmitting] = useState(false);
 
-  // Every mutation ends in router.refresh(): the server component owns this
-  // data, so returning to server truth beats guessing a rollback.
+  // Every mutation ends in a refresh: the server component owns this data, so
+  // returning to server truth beats guessing a rollback. The refresh itself now
+  // lives in useRefreshingAction, which is what keeps `busy` true across it —
+  // callers wrap these in `run` rather than each firing their own.
   async function mutate(
     url: string,
     init: RequestInit,
@@ -55,12 +56,11 @@ export function MembersPanel({
     if (!res.ok) {
       setError((body["error"] as string) ?? fallbackError);
     }
-    router.refresh();
     return { ok: res.ok, body };
   }
 
-  async function changeRole(clerkUserId: string, role: CohortRole) {
-    await mutate(
+  function changeRole(clerkUserId: string, role: CohortRole) {
+    run(() => mutate(
       `/admin/api/groups/${groupId}/members/${clerkUserId}`,
       {
         method: "PATCH",
@@ -68,26 +68,30 @@ export function MembersPanel({
         body: JSON.stringify({ role }),
       },
       "Could not change the role",
+    ));
+  }
+
+  function removeMember(clerkUserId: string) {
+    run(() =>
+      mutate(
+        `/admin/api/groups/${groupId}/members/${clerkUserId}`,
+        { method: "DELETE" },
+        "Could not remove that member",
+      ),
     );
   }
 
-  async function removeMember(clerkUserId: string) {
-    await mutate(
-      `/admin/api/groups/${groupId}/members/${clerkUserId}`,
-      { method: "DELETE" },
-      "Could not remove that member",
+  function revokeInvite(invitationId: string) {
+    run(() =>
+      mutate(
+        `/admin/api/groups/${groupId}/invites/${invitationId}`,
+        { method: "DELETE" },
+        "Could not revoke that invitation",
+      ),
     );
   }
 
-  async function revokeInvite(invitationId: string) {
-    await mutate(
-      `/admin/api/groups/${groupId}/invites/${invitationId}`,
-      { method: "DELETE" },
-      "Could not revoke that invitation",
-    );
-  }
-
-  async function addMember(event: React.FormEvent) {
+  function addMember(event: React.FormEvent) {
     event.preventDefault();
     const trimmed = email.trim();
     // Same rule the route enforces — checked here so an obvious typo never
@@ -98,8 +102,7 @@ export function MembersPanel({
       return;
     }
 
-    setSubmitting(true);
-    try {
+    run(async () => {
       const { ok, body } = await mutate(
         `/admin/api/groups/${groupId}/members`,
         {
@@ -121,9 +124,7 @@ export function MembersPanel({
             : `Invitation sent to ${trimmed}.`,
         );
       }
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
   return (
@@ -180,7 +181,7 @@ export function MembersPanel({
                       value={member.role}
                       // The API returns 403 for a caller targeting their own
                       // role, so an enabled control would offer a refused action.
-                      disabled={isSelf}
+                      disabled={isSelf || busy}
                       title={isSelf ? "You cannot change your own role" : undefined}
                       aria-label={`Group role for ${member.email ?? member.clerkUserId}`}
                       onChange={(e) => changeRole(member.clerkUserId, e.target.value as CohortRole)}
@@ -206,6 +207,7 @@ export function MembersPanel({
                     <Button
                       tone="destructive"
                       size="sm"
+                      disabled={busy}
                       onClick={() => removeMember(member.clerkUserId)}
                       aria-label={`${isSelf ? "Leave this group" : `Remove ${member.email ?? member.clerkUserId}`}`}
                     >
@@ -232,6 +234,7 @@ export function MembersPanel({
                   <Button
                     tone="destructive"
                     size="sm"
+                    disabled={busy}
                     onClick={() => revokeInvite(invite.id)}
                     aria-label={`Revoke the invitation for ${invite.email}`}
                   >
@@ -278,8 +281,8 @@ export function MembersPanel({
             autoComplete="off"
             placeholder="Lovelace"
           />
-          <Button type="submit" disabled={isSubmitting}>
-            Add
+          <Button type="submit" disabled={busy}>
+            {busy ? "Adding\u2026" : "Add"}
           </Button>
         </form>
       )}

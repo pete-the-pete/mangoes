@@ -1,11 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { TextField } from "@/components/ui/Field";
 import { MAX_NAME_LENGTH } from "@/lib/userName";
+import { useRefreshingAction } from "@/lib/useRefreshingAction";
 
 export function AccountNameForm({
   initialFirstName,
@@ -14,41 +14,40 @@ export function AccountNameForm({
   initialFirstName: string;
   initialLastName: string;
 }) {
-  const router = useRouter();
+  const { busy, run } = useRefreshingAction();
   const [firstName, setFirstName] = useState(initialFirstName);
   const [lastName, setLastName] = useState(initialLastName);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(event: FormEvent) {
+  function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    setSaved(false);
+    run(async () => {
+      setError(null);
+      setSaved(false);
 
-    const res = await fetch("/api/me", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firstName, lastName }),
+      const res = await fetch("/api/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firstName, lastName }),
+      });
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(body.error ?? "Could not save your name");
+        return;
+      }
+
+      // Server truth, trimmed the way the route stored it — so the field shows
+      // what peers will actually see rather than the untrimmed thing typed here.
+      const body = (await res.json()) as { firstName: string; lastName: string };
+      setFirstName(body.firstName);
+      setLastName(body.lastName);
+      setSaved(true);
+      // Every surface that shows a name is server-rendered from Clerk, so the
+      // rest of the app only catches up on the hook's refresh — which runs
+      // inside this transition, so "Saving..." covers it too.
     });
-
-    setSubmitting(false);
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(body.error ?? "Could not save your name");
-      return;
-    }
-
-    // Server truth, trimmed the way the route stored it — so the field shows
-    // what peers will actually see rather than the untrimmed thing typed here.
-    const body = (await res.json()) as { firstName: string; lastName: string };
-    setFirstName(body.firstName);
-    setLastName(body.lastName);
-    setSaved(true);
-    // Every surface that shows a name is server-rendered from Clerk, so the
-    // rest of the app only catches up on a refresh.
-    router.refresh();
   }
 
   return (
@@ -99,8 +98,8 @@ export function AccountNameForm({
       )}
 
       <div className="flex justify-end">
-        <Button type="submit" disabled={submitting}>
-          {submitting ? "Saving…" : "Save"}
+        <Button type="submit" disabled={busy}>
+          {busy ? "Saving…" : "Save"}
         </Button>
       </div>
     </form>

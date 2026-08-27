@@ -22,7 +22,7 @@ import { extendTailwindMerge } from "tailwind-merge";
  */
 // The generic declares the custom class-group ids added under `extend`;
 // without it TS rejects them as unknown keys.
-const twMerge = extendTailwindMerge<"text-stroke" | "sticker-off">({
+const twMerge = extendTailwindMerge<"text-stroke" | "sticker-off" | "skeleton-fill">({
   extend: {
     theme: {
       color: [
@@ -109,6 +109,7 @@ const twMerge = extendTailwindMerge<"text-stroke" | "sticker-off">({
       // Custom @utility definitions in globals.css.
       "text-stroke": [{ "text-stroke": ["3", "4", "5", "6", "7", "8"] }],
       "sticker-off": ["sticker-off"],
+      "skeleton-fill": ["skeleton-fill"],
     },
   },
 });

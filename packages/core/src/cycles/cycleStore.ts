@@ -83,33 +83,69 @@ async function replaceItemTypes(
   }
 }
 
+/**
+ * One cycle row plus its participant and item-type lists, assembled in the
+ * database rather than in three round trips.
+ *
+ * This used to be three sequential queries per cycle, which made
+ * `listCyclesForCohort` cost 1 + 3N round trips — a group with 20 sessions paid
+ * 61 of them, serialized, on both the member and admin group pages. The lateral
+ * aggregates collapse that to exactly one query no matter how many cycles match.
+ *
+ * LEFT JOIN LATERAL rather than a plain GROUP BY: a cycle with no participants
+ * or no item types still has to come back (an admin can save one mid-setup), and
+ * grouping would need every cycle column in the GROUP BY to achieve the same
+ * thing. COALESCE turns the resulting NULL aggregate into an empty array so
+ * callers never see null.
+ *
+ * The ORDER BY inside each array_agg is what preserves the orderings the old
+ * separate queries had: participants by creation, item types by the position the
+ * admin's picker chose. Dropping them would silently reshuffle the tap targets.
+ */
+const CYCLE_DETAIL_FROM = `
+  FROM cycles c
+  LEFT JOIN LATERAL (
+    SELECT array_agg(cp.clerk_user_id ORDER BY cp.created_at, cp.clerk_user_id) AS ids
+    FROM cycle_participants cp
+    WHERE cp.cycle_id = c.id
+  ) p ON true
+  LEFT JOIN LATERAL (
+    SELECT array_agg(cit.item_type_key ORDER BY cit.position, cit.item_type_key) AS keys
+    FROM cycle_item_types cit
+    WHERE cit.cycle_id = c.id
+  ) t ON true`;
+
+const CYCLE_DETAIL_SELECT = `
+  SELECT ${CYCLE_COLUMNS.split(", ")
+    .map((column) => `c.${column}`)
+    .join(", ")},
+         COALESCE(p.ids, '{}') AS participant_ids,
+         COALESCE(t.keys, '{}') AS item_type_keys
+  ${CYCLE_DETAIL_FROM}`;
+
+interface CycleDetailRow extends CycleRow {
+  participant_ids: string[];
+  item_type_keys: string[];
+}
+
+function toDetail(row: CycleDetailRow): CycleDetail {
+  return {
+    ...toCycle(row),
+    participantIds: row.participant_ids,
+    itemTypeKeys: row.item_type_keys,
+  };
+}
+
 async function readDetail(
   runner: Pool | PoolClient,
   cycleId: string,
 ): Promise<CycleDetail | undefined> {
-  const cycleResult = await runner.query<CycleRow>(
-    `SELECT ${CYCLE_COLUMNS} FROM cycles WHERE id = $1`,
+  const result = await runner.query<CycleDetailRow>(
+    `${CYCLE_DETAIL_SELECT} WHERE c.id = $1`,
     [cycleId],
   );
-  const row = cycleResult.rows[0];
-  if (!row) {
-    return undefined;
-  }
-  const participants = await runner.query<{ clerk_user_id: string }>(
-    `SELECT clerk_user_id FROM cycle_participants
-     WHERE cycle_id = $1 ORDER BY created_at, clerk_user_id`,
-    [cycleId],
-  );
-  const itemTypes = await runner.query<{ item_type_key: string }>(
-    `SELECT item_type_key FROM cycle_item_types
-     WHERE cycle_id = $1 ORDER BY position, item_type_key`,
-    [cycleId],
-  );
-  return {
-    ...toCycle(row),
-    participantIds: participants.rows.map((r) => r.clerk_user_id),
-    itemTypeKeys: itemTypes.rows.map((r) => r.item_type_key),
-  };
+  const row = result.rows[0];
+  return row ? toDetail(row) : undefined;
 }
 
 export function createPostgresCycleStore(pool: Pool): CycleStore {
@@ -149,18 +185,13 @@ export function createPostgresCycleStore(pool: Pool): CycleStore {
     },
 
     async listCyclesForCohort(cohortId) {
-      const result = await pool.query<{ id: string }>(
-        `SELECT id FROM cycles WHERE cohort_id = $1 ORDER BY starts_at DESC, id`,
+      const result = await pool.query<CycleDetailRow>(
+        `${CYCLE_DETAIL_SELECT}
+         WHERE c.cohort_id = $1
+         ORDER BY c.starts_at DESC, c.id`,
         [cohortId],
       );
-      const details: CycleDetail[] = [];
-      for (const { id } of result.rows) {
-        const detail = await readDetail(pool, id);
-        if (detail) {
-          details.push(detail);
-        }
-      }
-      return details;
+      return result.rows.map(toDetail);
     },
 
     async updateCycle(cycleId, input) {
@@ -214,16 +245,19 @@ export function createPostgresCycleStore(pool: Pool): CycleStore {
     },
 
     async listCyclesForParticipant(clerkUserId) {
-      const result = await pool.query<{ id: string }>(
-        `SELECT c.id
-         FROM cycles c
-         JOIN cycle_participants p ON p.cycle_id = c.id
-         WHERE p.clerk_user_id = $1
+      // EXISTS rather than joining cycle_participants into the main query: the
+      // lateral aggregate above already reads that table, and a second join to
+      // it would multiply rows before aggregation.
+      const result = await pool.query<CycleDetailRow>(
+        `${CYCLE_DETAIL_SELECT}
+         WHERE EXISTS (
+           SELECT 1 FROM cycle_participants mp
+           WHERE mp.cycle_id = c.id AND mp.clerk_user_id = $1
+         )
          ORDER BY c.starts_at DESC, c.id`,
         [clerkUserId],
       );
-      const details = await Promise.all(result.rows.map((row) => readDetail(pool, row.id)));
-      return details.filter((detail): detail is CycleDetail => detail !== undefined);
+      return result.rows.map(toDetail);
     },
 
     async isCycleParticipant(cycleId, clerkUserId) {
