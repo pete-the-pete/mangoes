@@ -131,6 +131,10 @@
   --animate-bob-slow: bob 3s ease-in-out infinite;
   --animate-shimmer: shimmer 1.4s linear infinite;
   --animate-pop-in: pop-in 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  /* The tapped tile's own acknowledgement, for the 2-4 and 5+ grid layouts
+     where the screen-centred celebration is nowhere near the thing you hit.
+     Shares pop-in's overshoot curve so the two read as one system. */
+  --animate-tile-pop: tile-pop 0.35s cubic-bezier(0.2, 1.6, 0.4, 1);
 
   /* Celebration set — unused until the effects pass, but the handoff calls
      these "the retention mechanic, not decoration", so they live with the
@@ -195,6 +199,17 @@
     100% {
       transform: scale(1) rotate(-3deg);
       opacity: 1;
+    }
+  }
+  @keyframes tile-pop {
+    0% {
+      transform: scale(1) rotate(0deg);
+    }
+    35% {
+      transform: scale(1.14) rotate(-3deg);
+    }
+    100% {
+      transform: scale(1) rotate(0deg);
     }
   }
   @keyframes word-out {
@@ -392,7 +407,19 @@
 
 /* The handoff requires a reduced-motion variant. Decorative loops stop
    entirely; one-shot feedback (press states, pop-in) is left alone because it
-   communicates state rather than decorating it. */
+   communicates state rather than decorating it.
+
+   The celebration is NOT gated here, deliberately. Its reduced variant is not
+   "no animation" but a different composition — flash and word mark, no
+   particles, no rocket, no clash (handoff.md:220) — and the 34 particles are
+   generated in JS, so there is no CSS-only off-ramp for them anyway. That
+   decision lives in useCelebration, which reads the same media query through
+   motion's useReducedMotion and simply doesn't render the pieces it drops.
+
+   `animate-flame` used to be listed below, which was the wrong half of a pair:
+   it gated the rocket's thrust while leaving `animate-rocket-up` running, so a
+   reduced-motion rocket flew flameless. Now the rocket never renders in that
+   mode at all and the flame has nothing to gate. */
 @media (prefers-reduced-motion: reduce) {
   .animate-spin-rays,
   .animate-spin-rays-slow,
@@ -401,8 +428,7 @@
   .animate-pulse-dot,
   .animate-bob,
   .animate-bob-slow,
-  .animate-shimmer,
-  .animate-flame {
+  .animate-shimmer {
     animation: none !important;
   }
 }

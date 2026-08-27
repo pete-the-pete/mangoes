@@ -96,6 +96,7 @@ const twMerge = extendTailwindMerge<"text-stroke" | "sticker-off" | "skeleton-fi
         "bob-slow",
         "shimmer",
         "pop-in",
+        "tile-pop",
         "word-out",
         "rocket-up",
         "flame",

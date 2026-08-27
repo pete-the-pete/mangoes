@@ -8,6 +8,7 @@ import { SessionScreen } from "./SessionScreen";
 
 interface PageProps {
   params: Promise<{ sessionId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 /**
@@ -15,7 +16,7 @@ interface PageProps {
  * (the session's own record, its item types, its participants) and hands
  * them to `SessionScreen`. `useSession` only ever tracks counts/pending ops.
  */
-export default async function SessionPage({ params }: PageProps) {
+export default async function SessionPage({ params, searchParams }: PageProps) {
   const { sessionId } = await params;
 
   const guard = await requireCycleParticipant(sessionId);
@@ -63,6 +64,12 @@ export default async function SessionPage({ params }: PageProps) {
   // leaderboard row.
   const isParticipant = cycle.participantIds.includes(me);
 
+  // `?fx=rocket|confetti|clash` forces one celebration instead of picking at
+  // random. Read here rather than with useSearchParams in the client component,
+  // which would need its own Suspense boundary. An array (`?fx=a&fx=b`) is
+  // ignored; pickEffect drops anything it doesn't recognise anyway.
+  const fx = (await searchParams)["fx"];
+
   return (
     <SessionScreen
       session={toMemberSessionJson(cycle)}
@@ -75,6 +82,7 @@ export default async function SessionPage({ params }: PageProps) {
           ? `/admin/groups/${cycle.cohortId}/sessions/${cycle.id}`
           : undefined
       }
+      forcedEffect={typeof fx === "string" ? fx : undefined}
     />
   );
 }
