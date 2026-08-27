@@ -1,6 +1,7 @@
 import { groupTotal, subjectTotal, type Aggregate } from "core";
 import { Avatar } from "./ui/Avatar";
 import { Card } from "./ui/Card";
+import { Stagger } from "./ui/Stagger";
 import { Label } from "./ui/Label";
 import { Pill } from "./ui/Pill";
 import { cn } from "./ui/cn";
@@ -48,6 +49,10 @@ export function Leaderboard({ itemTypes, participants, aggregate, me }: Leaderbo
         The leaderboard
       </Label>
 
+      {/* No `layout` animation on these rows, deliberately: the leaderboard is
+          unranked by design (docs/design/README.md rejects a ranked one), so
+          rows never reorder and there is no position change to animate. */}
+      <Stagger className="flex flex-col gap-2.5">
       {participants.map((p) => {
         const isMe = p.clerkUserId === me;
         return (
@@ -111,6 +116,7 @@ export function Leaderboard({ itemTypes, participants, aggregate, me }: Leaderbo
           ))}
         </span>
       </Card>
+      </Stagger>
 
       {/* groupTotal folds in entries logged for the group as a whole (an
           admin-only action with no member-facing surface), so Total can run

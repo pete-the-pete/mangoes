@@ -147,3 +147,127 @@ describe("getCurrentUserRole", () => {
     });
   });
 });
+
+/**
+ * The fast path, and the reason it can't quietly regress.
+ *
+ * `getCurrentUserRole` used to call `clerk.users.getUser()` on every
+ * authenticated request — 16 call sites, including the guard on every logged
+ * mango. These assert the absence of that call, which is the whole point and is
+ * otherwise invisible: reintroducing the round trip breaks no behavior, it just
+ * makes every request slower again, silently.
+ *
+ * The claim these read comes from the Clerk Dashboard's session-token template
+ * (`{"metadata": "{{user.public_metadata}}"}`). If that is ever removed, the
+ * "falls back" test below is the one that documents what happens.
+ */
+describe("getCurrentUserRole — the no-network fast path", () => {
+  beforeEach(() => {
+    vi.mocked(auth).mockReset();
+    vi.mocked(clerkClient).mockReset();
+    vi.mocked(joinPendingCohort).mockReset();
+    vi.mocked(applyPendingInviteName).mockReset();
+  });
+
+  /** Signed in with a session token that carries the publicMetadata claim. */
+  function signedInWithClaim(metadata: Record<string, unknown>) {
+    vi.mocked(auth).mockResolvedValue({
+      userId: "u1",
+      sessionClaims: { metadata },
+    } as never);
+    // Deliberately left as a rejecting mock: any call is a failure, not a pass.
+    vi.mocked(clerkClient).mockRejectedValue(
+      new Error("clerkClient() must not be called on the fast path"),
+    );
+  }
+
+  it("resolves a known user with no pending invite without calling Clerk", async () => {
+    signedInWithClaim({});
+
+    const result = await getCurrentUserRole(fakeStore({ u1: "member" }));
+
+    expect(result).toEqual({ clerkUserId: "u1", role: "member" });
+    expect(clerkClient).not.toHaveBeenCalled();
+    // The invite consumers are equally skipped — they only have work to do when
+    // the metadata says so, and the claim already told us it doesn't.
+    expect(joinPendingCohort).not.toHaveBeenCalled();
+    expect(applyPendingInviteName).not.toHaveBeenCalled();
+  });
+
+  it("still skips Clerk when consumed invite keys are left behind as null", async () => {
+    // joinPendingCohort nulls its key rather than deleting it, so this is what
+    // most real users' metadata looks like forever after their first sign-in.
+    // If this regressed, the fast path would never engage for anyone invited.
+    signedInWithClaim({
+      intendedCohortId: null,
+      intendedFirstName: null,
+      intendedRole: "member",
+    });
+
+    const result = await getCurrentUserRole(fakeStore({ u1: "member" }));
+
+    expect(result).toEqual({ clerkUserId: "u1", role: "member" });
+    expect(clerkClient).not.toHaveBeenCalled();
+  });
+
+  it("falls back to Clerk when the token carries no metadata claim", async () => {
+    // The session-token template isn't applied, or the token predates it. We
+    // can't tell "nothing pending" from "no information", so we must not guess.
+    // This is what makes the change safe to deploy before the Dashboard edit.
+    signedInAs("friend@gmail.com", {});
+
+    const result = await getCurrentUserRole(fakeStore({ u1: "member" }));
+
+    expect(result).toEqual({ clerkUserId: "u1", role: "member" });
+    expect(clerkClient).toHaveBeenCalled();
+  });
+
+  it("falls back to Clerk when the claim says an invite is still pending", async () => {
+    // A stale claim can only ever cost an extra round trip, never skip work —
+    // the authoritative metadata is then read from Clerk as before.
+    vi.mocked(auth).mockResolvedValue({
+      userId: "u1",
+      sessionClaims: { metadata: { intendedCohortId: "c1" } },
+    } as never);
+    vi.mocked(clerkClient).mockResolvedValue({
+      users: {
+        getUser: vi.fn().mockResolvedValue({
+          primaryEmailAddress: { emailAddress: "friend@gmail.com" },
+          publicMetadata: { intendedCohortId: "c1" },
+          firstName: null,
+          lastName: null,
+        }),
+      },
+    } as never);
+
+    await getCurrentUserRole(fakeStore({ u1: "member" }));
+
+    expect(clerkClient).toHaveBeenCalled();
+    expect(joinPendingCohort).toHaveBeenCalled();
+  });
+
+  it("falls back to Clerk on a user's first sight, claim or not", async () => {
+    // No role row yet, so resolveRole genuinely needs the email (bootstrap
+    // check) and intendedRole. The claim saying "nothing pending" is not
+    // enough on its own.
+    vi.mocked(auth).mockResolvedValue({
+      userId: "u1",
+      sessionClaims: { metadata: {} },
+    } as never);
+    vi.mocked(clerkClient).mockResolvedValue({
+      users: {
+        getUser: vi.fn().mockResolvedValue({
+          primaryEmailAddress: { emailAddress: "new@gmail.com" },
+          publicMetadata: {},
+          firstName: null,
+          lastName: null,
+        }),
+      },
+    } as never);
+
+    const result = await getCurrentUserRole(fakeStore());
+
+    expect(clerkClient).toHaveBeenCalled();
+    expect(result).toEqual({ clerkUserId: "u1", role: "member" });
+  });
+});

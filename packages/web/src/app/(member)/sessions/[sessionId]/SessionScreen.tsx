@@ -14,6 +14,7 @@ import { Pill } from "@/components/ui/Pill";
 import { Leaderboard, type LeaderboardItemType, type LeaderboardParticipant } from "@/components/Leaderboard";
 import { SyncBadge } from "@/components/SyncBadge";
 import { UndoToast } from "@/components/UndoToast";
+import { CelebrationLayer, useCelebration } from "@/components/Celebration";
 
 export interface SessionScreenProps {
   session: MemberSessionJson;
@@ -42,6 +43,13 @@ export interface SessionScreenProps {
    * and the admin page has the matching one back.
    */
   adminHref?: string | undefined;
+  /**
+   * Forces one of the three celebration effects instead of picking at random.
+   * QA and demo affordance only, read from a `?fx=` query param — the
+   * prototype has the same escape hatch, and cycling all three deterministically
+   * is the only way to review them. An unrecognised value is ignored.
+   */
+  forcedEffect?: string | undefined;
 }
 
 interface ToastState {
@@ -61,6 +69,7 @@ export function SessionScreen({
   me,
   readOnly,
   adminHref,
+  forcedEffect,
 }: SessionScreenProps) {
   const { state, displayed, log, undo } = useSession(session.id, me);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -89,8 +98,29 @@ export function SessionScreen({
   const disabled = closed || readOnly;
   const layout = pickLayout(itemTypes.length);
 
+  // The celebration. `forcedEffect` is the QA/design override — a query param
+  // rather than UI, so it costs nothing in the shipped screen.
+  const celebration = useCelebration(forcedEffect);
+  // Per-item-type tap counters, used only as React keys to restart each tile's
+  // local pop. Kept in one object so a tap on one tile can't restart another.
+  const [popKeys, setPopKeys] = useState<Record<string, number>>({});
+
   function handleTap(itemTypeKey: string) {
     if (disabled) return;
+
+    // Fired first and unconditionally, before any of the logging paths below.
+    // The handoff is explicit that the celebration must never gate or delay the
+    // count (handoff.md:220), and this ordering makes that structural rather
+    // than a thing to remember: nothing after this point can prevent it, and
+    // it awaits nothing itself. It also fires on the degraded path, where the
+    // count genuinely can't move yet — that is the one moment a member most
+    // needs to see their tap register.
+    celebration.fire();
+    setPopKeys((current) => ({
+      ...current,
+      [itemTypeKey]: (current[itemTypeKey] ?? 0) + 1,
+    }));
+
     if (state.degraded) {
       // No offline queue to fall back on — POST directly. This tap won't
       // show an undo toast (there's no local outbox row to target) and the
@@ -209,11 +239,14 @@ export function SessionScreen({
             size={layout}
             disabled={disabled}
             onTap={() => handleTap(t.key)}
+            popKey={popKeys[t.key] ?? 0}
           />
         ))}
       </div>
 
       <Leaderboard itemTypes={itemTypes} participants={participants} aggregate={displayed} me={me} />
+
+      <CelebrationLayer state={celebration.state} reduced={celebration.reduced} />
 
       {!readOnly && toast && (
         <UndoToast

@@ -12,6 +12,11 @@ export interface TapTargetProps {
   /** True once the session is closed. */
   disabled: boolean;
   onTap: () => void;
+  /**
+   * A counter the caller bumps on each tap of this tile, to restart its local
+   * pop. Ignored by the hero size — see the note on the component.
+   */
+  popKey?: number;
 }
 
 /**
@@ -80,8 +85,18 @@ const REST: Record<TapTargetSize, string> = {
  * The press is pure CSS `:active`. This is the tap path of the core loop,
  * where routing feedback through React state would put a render between the
  * finger and the response.
+ *
+ * `popKey` is how the tapped tile acknowledges itself in the grid layouts. It
+ * is a counter the caller bumps, used as a React `key` so the tile remounts and
+ * the CSS animation restarts — this component still holds no state, and the tap
+ * path still doesn't route through a re-render of its own.
+ *
+ * Only the grid and compact sizes take it. The hero has the screen-centred
+ * celebration landing directly on top of it, so a local pop is noise; and it is
+ * the only size with looping animations inside the tile (the ray ring, the
+ * bobbing glyph), which a remount would visibly restart.
  */
-export function TapTarget({ emoji, label, mine, group, size, disabled, onTap }: TapTargetProps) {
+export function TapTarget({ emoji, label, mine, group, size, disabled, onTap, popKey }: TapTargetProps) {
   const isHero = size === "large";
 
   return (
@@ -117,12 +132,14 @@ export function TapTarget({ emoji, label, mine, group, size, disabled, onTap }: 
 
       {/* The tap target proper. */}
       <span
+        key={isHero ? undefined : popKey}
         className={cn(
           "border-ink bg-mango-yellow relative grid place-items-center rounded-full border-solid",
           "transition-[transform,box-shadow] duration-75 ease-out",
           RING[size],
           REST[size],
           PRESS[size],
+          !isHero && popKey !== undefined && popKey > 0 && "animate-tile-pop will-change-transform",
           "group-disabled:shadow-none",
         )}
       >
