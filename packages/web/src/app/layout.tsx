@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Anton, Space_Grotesk } from "next/font/google";
 import { RegisterServiceWorker } from "./RegisterServiceWorker";
+import { MotionProvider } from "./MotionProvider";
 import { clerkAppearance } from "./clerkAppearance";
 import "./globals.css";
 
@@ -49,7 +50,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       {/* Clerk v7 requires ClerkProvider inside <body>, not wrapping <html> —
           wrapping <html> opts the whole app into dynamic rendering. */}
       <body className="min-h-full flex flex-col">
-        <ClerkProvider appearance={clerkAppearance}>{children}</ClerkProvider>
+        {/* One provider at the root. Scoping it to only the trees that animate
+            was tried and measured: it saved nothing, because `/` serves both the
+            signed-out Splash and the signed-in chooser from one route module,
+            and `next/dynamic` on the chooser didn't drop it from the initial
+            payload either. Motion costs ~40KB gzipped on every page as a result,
+            landing page included — the honest price of the celebration and the
+            list entrances. LazyMotion below is what keeps it to that. */}
+        <ClerkProvider appearance={clerkAppearance}>
+          <MotionProvider>{children}</MotionProvider>
+        </ClerkProvider>
         <RegisterServiceWorker />
       </body>
     </html>

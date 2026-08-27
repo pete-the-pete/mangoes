@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { SessionListItem } from "@/lib/memberSessions";
 import { Label } from "./ui/Label";
+import { Stagger } from "./ui/Stagger";
 
 export interface SessionGroupsProps {
   live: SessionListItem[];
@@ -39,7 +40,7 @@ export function SessionGroups({ live, scheduled, recent, renderItem }: SessionGr
             <Label size={12} as="h2" className="text-rust">
               {heading}
             </Label>
-            <div className="flex flex-col gap-2.5">{items.map(renderItem)}</div>
+            <Stagger className="flex flex-col gap-2.5">{items.map(renderItem)}</Stagger>
           </section>
         );
       })}

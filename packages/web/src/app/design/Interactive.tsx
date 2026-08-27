@@ -10,6 +10,7 @@ import { Toggle } from "@/components/ui/Toggle";
 import { TapTarget, layoutContainerClass } from "@/components/TapTarget";
 import { CelebrationLayer, useCelebration } from "@/components/Celebration";
 import { CELEBRATION_EFFECTS } from "@/lib/celebration";
+import { Stagger } from "@/components/ui/Stagger";
 
 /** The parts of the kit that need state, split out so the page stays a server component. */
 export function Interactive() {
@@ -29,6 +30,9 @@ export function Interactive() {
   // Tap counters for the grid/compact demo tiles, so the local pop is
   // reviewable here rather than only inside a real session.
   const [pops, setPops] = useState<Record<string, number>>({});
+  // Remount key for the Stagger demo — replaying an entrance means mounting it
+  // again, which is exactly what a real navigation does.
+  const [staggerRun, setStaggerRun] = useState(0);
   const bump = (key: string) => {
     setPops((c) => ({ ...c, [key]: (c[key] ?? 0) + 1 }));
     random.fire();
@@ -60,6 +64,27 @@ export function Interactive() {
         {Object.values(controllers).map((c, i) => (
           <CelebrationLayer key={i} state={c.state} reduced={c.reduced} />
         ))}
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <Label size={12} className="text-rust">
+          Stagger — list entrance
+        </Label>
+        <p className="text-12 text-rust max-w-prose leading-snug">
+          Rows fly in and click into place on the design system&rsquo;s overshoot
+          curve. Wraps server-rendered children, so the cards inside stay server
+          components. Honours reduce-motion by rendering the plain container.
+        </p>
+        <Button tone="secondary" size="sm" onClick={() => setStaggerRun((n) => n + 1)}>
+          Replay
+        </Button>
+        <Stagger key={staggerRun} className="flex flex-col gap-2.5">
+          {["Sunday sundowners", "Taco Tuesday", "Friday finals", "Long weekend"].map((name) => (
+            <Card key={name} tone="cream" border={4} radius={18} lift="xs" className="p-3">
+              <span className="font-display text-20">{name}</span>
+            </Card>
+          ))}
+        </Stagger>
       </section>
 
       <section className="flex flex-col gap-4">
