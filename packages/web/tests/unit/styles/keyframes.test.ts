@@ -60,12 +60,22 @@ describe("keyframes referenced by inline `animation` shorthands", () => {
   const theme = themeBlock(css);
   const outsideTheme = css.replace(theme, "");
 
-  /** Keyframe names used in a hand-written `animation:` shorthand in src/. */
+  /**
+   * Keyframe names used in a hand-written `animation:` shorthand in src/.
+   *
+   * The shorthand puts the name first, so the first token after `animation:`
+   * is it. Two forms are excluded rather than matched: `none`, and anything
+   * starting `var(` — a value indirected through a custom property is a theme
+   * token by definition, which is the case Tailwind already tracks and the
+   * case this file is not about.
+   */
+  const NOT_A_KEYFRAME = new Set(["none", "var", "inherit", "initial", "unset", "revert"]);
   const inlineNames = [
     ...new Set(
       sourceFiles(WEB_SRC)
-        .flatMap((f) => [...readFileSync(f, "utf8").matchAll(/animation:\s*`?([a-z][\w-]*)/g)])
-        .map((m) => m[1]!),
+        .flatMap((f) => [...readFileSync(f, "utf8").matchAll(/animation:\s*[`"\x27]?([a-zA-Z][\w-]*)/g)])
+        .map((m) => m[1]!)
+        .filter((name) => !NOT_A_KEYFRAME.has(name)),
     ),
   ];
 
