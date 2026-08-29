@@ -49,9 +49,33 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (new URL(request.url).pathname.startsWith("/api/")) return; // never cache API reads
+  // Everything else is left to the browser, and that is deliberate.
+  //
+  // This handler never calls `cache.put`, so the cache can only ever contain
+  // the three precached SHELL entries — which makes SHELL the interception
+  // allowlist as well as the precache list. Keep the two meanings together: a
+  // path added there becomes a path this worker serves.
+  //
+  // The previous version ran `caches.match(request).then((c) => c ?? fetch(request))`
+  // for every same-origin GET. That bought nothing — the match missed for
+  // everything but those three — and it cost a real bug: nothing caught that
+  // `fetch`, so any request failing at the network layer (an aborted RSC link
+  // prefetch, an extension-blocked Clerk or analytics script) became
+  // "Uncaught (in promise) TypeError: Failed to fetch" attributed to this file.
+  // Declining to respond hands those back to the browser, which reports a
+  // failed request the ordinary way instead.
+  //
+  // Note this is a synchronous decision on purpose: `respondWith` must be called
+  // during dispatch, so "only intercept what we might have" cannot be expressed
+  // as a check on the cache itself.
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin || !SHELL.includes(url.pathname)) {
+    return;
+  }
 
   event.respondWith(
-    caches.match(request).then((cached) => cached ?? fetch(request)),
+    // Cache-first, and the fallback is still guarded: an offline miss here
+    // must fail as a network error, not as an unhandled rejection.
+    caches.match(request).then((cached) => cached ?? fetch(request).catch(() => Response.error())),
   );
 });

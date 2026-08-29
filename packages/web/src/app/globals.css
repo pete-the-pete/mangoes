@@ -147,7 +147,9 @@
   --animate-star-pop: star-pop 0.7s ease-out forwards;
   --animate-flash-bg: flash-bg 0.5s linear forwards;
   /* `burst` takes its duration/delay per particle (0.8-1.3s, staggered), so
-     it is applied inline rather than as a token. Keyframes below. */
+     it is applied inline rather than as a token, and its keyframes therefore
+     have to live OUTSIDE this block, below `@theme inline`. The long note
+     there explains why; do not move them back up here. */
 
   @keyframes spin-rays {
     to {
@@ -227,19 +229,6 @@
     }
     100% {
       transform: scale(1.6) rotate(-6deg);
-      opacity: 0;
-    }
-  }
-  @keyframes burst {
-    0% {
-      transform: translate(0, 0) rotate(0deg) scale(0.3);
-      opacity: 1;
-    }
-    70% {
-      opacity: 1;
-    }
-    100% {
-      transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1);
       opacity: 0;
     }
   }
@@ -327,6 +316,41 @@
 @theme inline {
   --font-display: var(--font-anton), "Anton", sans-serif;
   --font-sans: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+}
+
+/* ---------------------------------------------------------------------------
+ * The confetti particle flight, deliberately NOT inside `@theme`.
+ *
+ * Tailwind only emits a keyframe declared in `@theme` when some *used*
+ * `--animate-*` theme variable references it by name. `burst` has no such
+ * token on purpose — `Celebration.tsx` writes the `animation` shorthand inline
+ * so each of the 34 particles carries its own duration and delay — so inside
+ * `@theme` it was tree-shaken out of the production stylesheet entirely and
+ * the whole "MANGO RAIN" effect rendered 34 permanently invisible mangoes.
+ *
+ * Adding a `--animate-burst` token is NOT the fix: an unreferenced token is
+ * dropped exactly the same way, and the per-particle timing is the reason
+ * there is no token to reference in the first place. Plain CSS out here is
+ * passed through unconditionally, which is the property we actually want.
+ *
+ * Do not tidy this back into `@theme` alongside the other keyframes. It only
+ * looks out of place; `@theme` membership is what broke it. Any future
+ * keyframe applied via an inline `animation` shorthand belongs out here too.
+ *
+ * `--dx`/`--dy`/`--rot` are set per particle as inline styles.
+ * ------------------------------------------------------------------------- */
+@keyframes burst {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(0.3);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1);
+    opacity: 0;
+  }
 }
 
 /* ---------------------------------------------------------------------------
