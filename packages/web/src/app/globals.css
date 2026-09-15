@@ -131,7 +131,7 @@
   --animate-bob-slow: bob 3s ease-in-out infinite;
   --animate-shimmer: shimmer 1.4s linear infinite;
   --animate-pop-in: pop-in 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) both;
-  --animate-undo-rock: undo-rock 1.25s ease-in-out both;
+  --animate-undo-rock: undo-rock 1.8s ease-in-out both;
   /* The tapped tile's own acknowledgement, for the 2-4 and 5+ grid layouts
      where the screen-centred celebration is nowhere near the thing you hit.
      Shares pop-in's overshoot curve so the two read as one system. */
@@ -140,20 +140,20 @@
   /* Celebration set — unused until the effects pass, but the handoff calls
      these "the retention mechanic, not decoration", so they live with the
      rest of the system rather than in whichever component lands first. */
-  --animate-word-out: word-out 1.2s ease-out forwards;
-  --animate-rocket-up: rocket-up 1.15s cubic-bezier(0.5, 0, 0.75, 0.2) forwards;
-  --animate-flame: flame 0.09s linear infinite;
-  --animate-clash-l: clash-l 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) forwards;
-  --animate-clash-r: clash-r 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) forwards;
-  --animate-star-pop: star-pop 0.7s ease-out forwards;
-  --animate-mania-fling: mania-fling 1.2s cubic-bezier(0.18, 0.72, 0.25, 1) both;
-  --animate-mangonificient-spotlight: mangonificient-spotlight 1.3s ease-out both;
-  --animate-mangonificient-rays: mangonificient-rays 1.3s cubic-bezier(0.2, 0.8, 0.3, 1) both;
-  --animate-mangonificient-mango: mangonificient-mango 1.3s cubic-bezier(0.2, 1.2, 0.35, 1) both;
-  --animate-mango-dance-left: mango-dance-left 1.3s ease-in-out both;
-  --animate-mango-dance-right: mango-dance-right 1.3s ease-in-out both;
-  --animate-mango-heart: mango-heart 1.3s ease-out both;
-  --animate-flash-bg: flash-bg 0.5s linear forwards;
+  --animate-word-out: word-out 1.9s ease-out forwards;
+  --animate-rocket-up: rocket-up 1.9s cubic-bezier(0.5, 0, 0.75, 0.2) forwards;
+  --animate-flame: flame 0.12s linear infinite;
+  --animate-clash-l: clash-l 1.4s cubic-bezier(0.3, 1.6, 0.5, 1) forwards;
+  --animate-clash-r: clash-r 1.4s cubic-bezier(0.3, 1.6, 0.5, 1) forwards;
+  --animate-star-pop: star-pop 1.45s ease-out forwards;
+  --animate-mania-fling: mania-fling 1.9s cubic-bezier(0.18, 0.72, 0.25, 1) both;
+  --animate-mangonificient-spotlight: mangonificient-spotlight 2.05s ease-out both;
+  --animate-mangonificient-rays: mangonificient-rays 2.05s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  --animate-mangonificient-mango: mangonificient-mango 2.05s cubic-bezier(0.2, 1.2, 0.35, 1) both;
+  --animate-mango-dance-left: mango-dance-left 2.05s ease-in-out both;
+  --animate-mango-dance-right: mango-dance-right 2.05s ease-in-out both;
+  --animate-mango-heart: mango-heart 2.05s ease-out both;
+  --animate-flash-bg: flash-bg 0.8s linear forwards;
   /* `burst` takes its duration/delay per particle (0.8-1.3s, staggered), so
      it is applied inline rather than as a token, and its keyframes therefore
      have to live OUTSIDE this block, below `@theme inline`. The long note
@@ -217,20 +217,20 @@
       opacity: 0;
     }
     12% {
-      transform: scale(1.08) rotate(-42deg);
+      transform: scale(1.08) rotate(-24deg);
       opacity: 1;
     }
     30% {
-      transform: scale(1) rotate(42deg);
+      transform: scale(1) rotate(24deg);
     }
     48% {
-      transform: scale(1) rotate(-42deg);
+      transform: scale(1) rotate(-24deg);
     }
     66% {
-      transform: scale(1) rotate(42deg);
+      transform: scale(1) rotate(24deg);
     }
     84% {
-      transform: scale(1) rotate(-42deg);
+      transform: scale(1) rotate(-24deg);
       opacity: 1;
     }
     100% {

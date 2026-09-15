@@ -12,6 +12,7 @@ import {
 } from "@/lib/celebration";
 
 const MANIA_MANGOES = Array.from({ length: 8 }, (_, index) => index);
+const PARTICLE_TIME_SCALE = 1.55;
 
 interface CelebrationState {
   effect: CelebrationEffect;
@@ -28,7 +29,7 @@ export interface CelebrationController {
 }
 
 /**
- * Owns the celebration's transient state and its 1.5s teardown.
+ * Owns the celebration's transient state and its 2.4s teardown.
  *
  * `fire()` is deliberately fire-and-forget and does no async work: the handoff
  * is explicit that effects must never block or delay the count increment
@@ -87,7 +88,7 @@ export function useCelebration(forced?: string | null): CelebrationController {
  * tapped tile gets its own local pop instead (see TapTarget).
  *
  * `pointer-events-none` is load-bearing, not tidiness: this sits above the tap
- * target for 1.5s, and without it every celebration would eat the next tap.
+ * target for 2.4s, and without it every celebration would eat the next tap.
  */
 export function CelebrationLayer({ state, reduced }: { state: CelebrationState | null; reduced: boolean }) {
   if (!state) {
@@ -117,7 +118,7 @@ export function CelebrationLayer({ state, reduced }: { state: CelebrationState |
               "--dx": `${p.dx}px`,
               "--dy": `${p.dy}px`,
               "--rot": `${p.rot}deg`,
-              animation: `burst ${p.duration}s cubic-bezier(.15,.7,.3,1) ${p.delay}s forwards`,
+              animation: `burst ${p.duration * PARTICLE_TIME_SCALE}s cubic-bezier(.15,.7,.3,1) ${p.delay * PARTICLE_TIME_SCALE}s forwards`,
             } as React.CSSProperties}
           >
             🥭

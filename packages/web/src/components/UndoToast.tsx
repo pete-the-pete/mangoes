@@ -6,12 +6,14 @@ import { Label } from "./ui/Label";
 
 export interface UndoToastProps {
   label: string;
+  /** The themed cutout belongs only to the default mango item type. */
+  showMangoAnimation: boolean;
   onUndo: () => void;
   onDismiss: () => void;
 }
 
 const VISIBLE_MS = 5000;
-const UNDO_ANIMATION_MS = 1250;
+const UNDO_ANIMATION_MS = 1800;
 const UNDO_IMAGE_SRC = "/animations/you-cannot-have-mango.png";
 
 /**
@@ -31,7 +33,7 @@ const UNDO_IMAGE_SRC = "/animations/you-cannot-have-mango.png";
  * the toast fires on every tap in the core loop, and a CSS animation costs
  * nothing per tap.
  */
-export function UndoToast({ label, onUndo, onDismiss }: UndoToastProps) {
+export function UndoToast({ label, showMangoAnimation, onUndo, onDismiss }: UndoToastProps) {
   const [showUndoAnimation, setShowUndoAnimation] = useState(false);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -45,6 +47,12 @@ export function UndoToast({ label, onUndo, onDismiss }: UndoToastProps) {
 
   function handleUndo() {
     onUndo();
+
+    if (!showMangoAnimation) {
+      onDismiss();
+      return;
+    }
+
     setShowUndoAnimation(true);
 
     if (dismissTimer.current) clearTimeout(dismissTimer.current);
@@ -63,7 +71,7 @@ export function UndoToast({ label, onUndo, onDismiss }: UndoToastProps) {
         <img
           src={UNDO_IMAGE_SRC}
           alt=""
-          className="animate-undo-rock h-auto max-h-[72vh] w-[min(58vw,260px)] object-contain [transform-origin:50%_100%]"
+          className="animate-undo-rock h-auto w-auto max-h-[58vh] max-w-[min(48vw,220px)] object-contain [transform-origin:50%_100%]"
         />
       </div>
     );
