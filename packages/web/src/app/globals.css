@@ -146,6 +146,13 @@
   --animate-clash-l: clash-l 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) forwards;
   --animate-clash-r: clash-r 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) forwards;
   --animate-star-pop: star-pop 0.7s ease-out forwards;
+  --animate-mania-fling: mania-fling 1.2s cubic-bezier(0.18, 0.72, 0.25, 1) both;
+  --animate-mangonificient-spotlight: mangonificient-spotlight 1.3s ease-out both;
+  --animate-mangonificient-rays: mangonificient-rays 1.3s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  --animate-mangonificient-mango: mangonificient-mango 1.3s cubic-bezier(0.2, 1.2, 0.35, 1) both;
+  --animate-mango-dance-left: mango-dance-left 1.3s ease-in-out both;
+  --animate-mango-dance-right: mango-dance-right 1.3s ease-in-out both;
+  --animate-mango-heart: mango-heart 1.3s ease-out both;
   --animate-flash-bg: flash-bg 0.5s linear forwards;
   /* `burst` takes its duration/delay per particle (0.8-1.3s, staggered), so
      it is applied inline rather than as a token, and its keyframes therefore
@@ -323,6 +330,147 @@
     }
     100% {
       transform: scale(2.4) rotate(60deg);
+      opacity: 0;
+    }
+  }
+  @keyframes mania-fling {
+    0% {
+      transform: rotate(var(--mania-angle)) translateY(0) scale(0.15);
+      opacity: 0;
+    }
+    20% {
+      transform: rotate(calc(var(--mania-angle) + 100deg)) translateY(-72px) scale(1.15);
+      opacity: 1;
+    }
+    70% {
+      transform: rotate(calc(var(--mania-angle) + 300deg)) translateY(-112px) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: rotate(calc(var(--mania-angle) + 430deg)) translateY(-310px) scale(0.45);
+      opacity: 0;
+    }
+  }
+  @keyframes mangonificient-spotlight {
+    0% {
+      transform: scaleX(0.04);
+      opacity: 0;
+    }
+    24% {
+      transform: scaleX(1);
+      opacity: 0.85;
+    }
+    80% {
+      transform: scaleX(1);
+      opacity: 0.7;
+    }
+    100% {
+      transform: scaleX(1.25);
+      opacity: 0;
+    }
+  }
+  @keyframes mangonificient-rays {
+    0% {
+      transform: scale(0.15) rotate(-24deg);
+      opacity: 0;
+    }
+    32% {
+      transform: scale(1) rotate(0deg);
+      opacity: 0.75;
+    }
+    82% {
+      transform: scale(1.08) rotate(28deg);
+      opacity: 0.65;
+    }
+    100% {
+      transform: scale(1.35) rotate(38deg);
+      opacity: 0;
+    }
+  }
+  @keyframes mangonificient-mango {
+    0% {
+      transform: translateY(220px) scale(0.35) rotate(-20deg);
+      opacity: 0;
+    }
+    34% {
+      transform: translateY(0) scale(1.15) rotate(7deg);
+      opacity: 1;
+    }
+    58% {
+      transform: translateY(0) scale(1) rotate(0deg);
+    }
+    74% {
+      transform: translateY(12px) scale(1) rotate(17deg);
+    }
+    88% {
+      transform: translateY(0) scale(1.04) rotate(-5deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(-18px) scale(0.8) rotate(0deg);
+      opacity: 0;
+    }
+  }
+  @keyframes mango-dance-left {
+    0% {
+      transform: translate(-240px, 180px) rotate(-80deg) scale(0.6);
+      opacity: 0;
+    }
+    24% {
+      transform: translate(-72px, 22px) rotate(-16deg) scale(1);
+      opacity: 1;
+    }
+    46% {
+      transform: translate(34px, -88px) rotate(130deg) scale(1.05);
+    }
+    66% {
+      transform: translate(58px, 20px) rotate(20deg) scale(1);
+    }
+    84% {
+      transform: translate(-60px, 16px) rotate(-8deg) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(-60px, 16px) rotate(-8deg) scale(0.85);
+      opacity: 0;
+    }
+  }
+  @keyframes mango-dance-right {
+    0% {
+      transform: translate(240px, 180px) rotate(80deg) scale(0.6);
+      opacity: 0;
+    }
+    24% {
+      transform: translate(72px, 22px) rotate(16deg) scale(1);
+      opacity: 1;
+    }
+    46% {
+      transform: translate(-34px, -88px) rotate(-130deg) scale(1.05);
+    }
+    66% {
+      transform: translate(-58px, 20px) rotate(-20deg) scale(1);
+    }
+    84% {
+      transform: translate(60px, 16px) rotate(8deg) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(60px, 16px) rotate(8deg) scale(0.85);
+      opacity: 0;
+    }
+  }
+  @keyframes mango-heart {
+    0%,
+    68% {
+      transform: translateY(30px) scale(0);
+      opacity: 0;
+    }
+    82% {
+      transform: translateY(-10px) scale(1.2);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(-86px) scale(1.55);
       opacity: 0;
     }
   }

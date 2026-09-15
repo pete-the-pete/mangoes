@@ -12,11 +12,20 @@
  * decides *which* effect and *where* each particle goes.
  */
 
-export type CelebrationEffect = "rocket" | "confetti" | "clash";
+export type CelebrationEffect =
+  | "rocket"
+  | "confetti"
+  | "clash"
+  | "mania"
+  | "mangonificient"
+  | "two-to-mango";
 
 export const CELEBRATION_EFFECTS: readonly CelebrationEffect[] = [
   "rocket",
+  "mania",
+  "mangonificient",
   "confetti",
+  "two-to-mango",
   "clash",
 ];
 
@@ -25,13 +34,16 @@ export const CELEBRATION_WORDS: Record<CelebrationEffect, string> = {
   rocket: "BLAST OFF!!",
   confetti: "MANGO RAIN!!",
   clash: "KA-CHUNK!!",
+  mania: "MANGO MANIA",
+  mangonificient: "MANGONIFICIENT",
+  "two-to-mango": "IT TAKES TWO TO MANGO",
 };
 
 /**
  * How long the whole effect window lasts before state clears.
  *
  * 1500ms is from the handoff, and it is deliberately longer than the longest
- * single animation (word-out at 1200ms) so nothing is cut off mid-flight.
+ * single animation (the 1300ms reveal/dance effects) so nothing is cut off.
  */
 export const CELEBRATION_MS = 1500;
 
@@ -39,10 +51,10 @@ export const CELEBRATION_MS = 1500;
 export type RandomSource = () => number;
 
 /**
- * Picks one of the three effects, or honours a forced override.
+ * Picks one of the six effects, or honours a forced override.
  *
  * The override exists for QA and for the /design gallery, where cycling through
- * all three deterministically is the whole point — the prototype has the same
+ * every effect deterministically is the whole point — the prototype has the same
  * escape hatch. An unrecognised value falls back to random rather than throwing:
  * this sits on the tap path, and a bad query param must never cost someone
  * their log.

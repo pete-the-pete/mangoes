@@ -20,12 +20,23 @@ export function Interactive() {
 
   // Each effect gets its own controller so the buttons below are deterministic
   // — one shared one with a forced value would still be fine, but this way the
-  // page shows all three as separate, independently replayable things.
+  // page shows every effect as a separate, independently replayable thing.
   const rocket = useCelebration("rocket");
   const confetti = useCelebration("confetti");
   const clash = useCelebration("clash");
+  const mania = useCelebration("mania");
+  const mangonificient = useCelebration("mangonificient");
+  const twoToMango = useCelebration("two-to-mango");
   const random = useCelebration();
-  const controllers = { rocket, confetti, clash, random };
+  const controllers = {
+    rocket,
+    confetti,
+    clash,
+    mania,
+    mangonificient,
+    "two-to-mango": twoToMango,
+    random,
+  };
 
   // Tap counters for the grid/compact demo tiles, so the local pop is
   // reviewable here rather than only inside a real session.
@@ -42,11 +53,11 @@ export function Interactive() {
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-4">
         <Label size={12} className="text-rust">
-          Celebration on log — the three effects
+          Celebration on log — the six effects
         </Label>
         <p className="text-12 text-rust max-w-prose leading-snug">
           Fires on every tap in the real session screen. Pure CSS: every keyframe
-          already lived in globals.css. Turn on OS reduce-motion and replay to
+          lives in globals.css. Turn on OS reduce-motion and replay to
           see the reduced variant — flash and word mark only, no particles.
         </p>
         <div className="flex flex-wrap gap-2">

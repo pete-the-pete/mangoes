@@ -11,6 +11,8 @@ import {
   type CelebrationParticle,
 } from "@/lib/celebration";
 
+const MANIA_MANGOES = Array.from({ length: 8 }, (_, index) => index);
+
 interface CelebrationState {
   effect: CelebrationEffect;
   particles: CelebrationParticle[];
@@ -158,11 +160,64 @@ export function CelebrationLayer({ state, reduced }: { state: CelebrationState |
         </div>
       )}
 
+      {!reduced && effect === "mania" && (
+        <div className="absolute top-1/2 left-1/2 h-0 w-0">
+          {MANIA_MANGOES.map((index) => (
+            <span
+              key={index}
+              className="animate-mania-fling absolute -top-7 -left-7 text-[54px] leading-none opacity-0 will-change-transform"
+              style={{
+                "--mania-angle": `${index * 45}deg`,
+                animationDelay: `${index * 0.018}s`,
+              } as React.CSSProperties}
+            >
+              🥭
+            </span>
+          ))}
+        </div>
+      )}
+
+      {!reduced && effect === "mangonificient" && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="animate-mangonificient-spotlight bg-turquoise/45 absolute top-[8%] h-[78vh] w-[min(84vw,520px)] [clip-path:polygon(43%_0,57%_0,100%_100%,0_100%)] [transform-origin:50%_0]" />
+          <div
+            className="animate-mangonificient-rays absolute size-[min(78vw,360px)] rounded-full opacity-0"
+            style={{
+              background:
+                "repeating-conic-gradient(var(--color-mango-yellow) 0deg 10deg, transparent 10deg 22deg)",
+            }}
+          />
+          <div className="animate-mangonificient-mango relative text-[clamp(108px,34vw,160px)] leading-none will-change-transform [transform-origin:50%_90%]">
+            🥭
+          </div>
+        </div>
+      )}
+
+      {!reduced && effect === "two-to-mango" && (
+        <div className="absolute top-1/2 left-1/2 h-0 w-0">
+          <div className="animate-mango-dance-left absolute -top-[62px] -left-[62px] text-[112px] leading-none will-change-transform">
+            🥭
+          </div>
+          <div className="animate-mango-dance-right absolute -top-[62px] -left-[62px] text-[112px] leading-none will-change-transform">
+            🥭
+          </div>
+          <div className="animate-mango-heart absolute -top-[108px] -left-[54px] text-[108px] leading-none opacity-0 will-change-transform">
+            🩷
+          </div>
+        </div>
+      )}
+
       {/* The word mark. Like the flash, it fires in the reduced variant too —
           it communicates that the tap landed, which is information, not
           decoration. */}
       <div className="animate-word-out absolute inset-x-0 top-[34%] text-center will-change-transform">
-        <span className="font-display text-mango-yellow text-stroke-7 text-[74px] leading-[0.9]">
+        <span
+          className={
+            effect === "two-to-mango"
+              ? "font-display text-mango-yellow text-stroke-7 inline-block max-w-[10ch] text-[clamp(40px,12vw,62px)] leading-[0.9]"
+              : "font-display text-mango-yellow text-stroke-7 text-[clamp(54px,16vw,74px)] leading-[0.9]"
+          }
+        >
           {CELEBRATION_WORDS[effect]}
         </span>
       </div>
