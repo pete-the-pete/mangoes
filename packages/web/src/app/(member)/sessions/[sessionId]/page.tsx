@@ -64,8 +64,9 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
   // leaderboard row.
   const isParticipant = cycle.participantIds.includes(me);
 
-  // `?fx=rocket|confetti|clash` forces one celebration instead of picking at
-  // random. Read here rather than with useSearchParams in the client component,
+  // `?fx=rocket|confetti|clash|mania|mangonificient|two-to-mango` forces one
+  // celebration instead of picking at random. Read here rather than with
+  // useSearchParams in the client component,
   // which would need its own Suspense boundary. An array (`?fx=a&fx=b`) is
   // ignored; pickEffect drops anything it doesn't recognise anyway.
   const fx = (await searchParams)["fx"];

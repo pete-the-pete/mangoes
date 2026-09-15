@@ -44,9 +44,9 @@ export interface SessionScreenProps {
    */
   adminHref?: string | undefined;
   /**
-   * Forces one of the three celebration effects instead of picking at random.
+   * Forces one of the six celebration effects instead of picking at random.
    * QA and demo affordance only, read from a `?fx=` query param — the
-   * prototype has the same escape hatch, and cycling all three deterministically
+   * prototype has the same escape hatch, and cycling every effect deterministically
    * is the only way to review them. An unrecognised value is ignored.
    */
   forcedEffect?: string | undefined;
