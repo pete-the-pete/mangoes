@@ -13,7 +13,7 @@ export interface UndoToastProps {
 }
 
 const VISIBLE_MS = 5000;
-const UNDO_ANIMATION_MS = 1800;
+const UNDO_ANIMATION_MS = 3000;
 const UNDO_IMAGE_SRC = "/animations/you-cannot-have-mango.png";
 
 /**
