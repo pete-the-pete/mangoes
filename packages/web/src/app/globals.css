@@ -131,6 +131,7 @@
   --animate-bob-slow: bob 3s ease-in-out infinite;
   --animate-shimmer: shimmer 1.4s linear infinite;
   --animate-pop-in: pop-in 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  --animate-undo-rock: undo-rock 1.25s ease-in-out both;
   /* The tapped tile's own acknowledgement, for the 2-4 and 5+ grid layouts
      where the screen-centred celebration is nowhere near the thing you hit.
      Shares pop-in's overshoot curve so the two read as one system. */
@@ -201,6 +202,33 @@
     100% {
       transform: scale(1) rotate(-3deg);
       opacity: 1;
+    }
+  }
+  @keyframes undo-rock {
+    0% {
+      transform: scale(0.25) rotate(0deg);
+      opacity: 0;
+    }
+    12% {
+      transform: scale(1.08) rotate(-42deg);
+      opacity: 1;
+    }
+    30% {
+      transform: scale(1) rotate(42deg);
+    }
+    48% {
+      transform: scale(1) rotate(-42deg);
+    }
+    66% {
+      transform: scale(1) rotate(42deg);
+    }
+    84% {
+      transform: scale(1) rotate(-42deg);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(0.75) rotate(0deg);
+      opacity: 0;
     }
   }
   @keyframes tile-pop {
@@ -453,6 +481,10 @@
   .animate-bob,
   .animate-bob-slow,
   .animate-shimmer {
+    animation: none !important;
+  }
+
+  .animate-undo-rock {
     animation: none !important;
   }
 }

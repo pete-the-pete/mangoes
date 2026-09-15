@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card } from "./ui/Card";
 import { Label } from "./ui/Label";
 
@@ -11,6 +11,8 @@ export interface UndoToastProps {
 }
 
 const VISIBLE_MS = 5000;
+const UNDO_ANIMATION_MS = 1250;
+const UNDO_IMAGE_SRC = "/animations/you-cannot-have-mango.png";
 
 /**
  * Appears after each tap for ~5s with a single Undo action. The caller
@@ -19,9 +21,10 @@ const VISIBLE_MS = 5000;
  * void; both are the same button here.
  *
  * The parent remounts this with a fresh `key` per tap (see SessionScreen),
- * so the mount-once timer below is exactly "5s from this toast appearing" —
- * no dependency on `onDismiss`'s identity is needed since the whole
- * component is torn down and recreated for the next toast.
+ * so the mount-once timer below is exactly "5s from this toast appearing."
+ * Undo replaces that timer with the shorter image-animation timer; no
+ * dependency on `onDismiss`'s identity is needed since the whole component
+ * is torn down and recreated for the next toast.
  *
  * The handoff has no undo design; screen 2's ink callback card is the nearest
  * thing, so this borrows it. `animate-pop-in` rather than a motion component:
@@ -29,11 +32,42 @@ const VISIBLE_MS = 5000;
  * nothing per tap.
  */
 export function UndoToast({ label, onUndo, onDismiss }: UndoToastProps) {
+  const [showUndoAnimation, setShowUndoAnimation] = useState(false);
+  const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
-    const timer = setTimeout(onDismiss, VISIBLE_MS);
-    return () => clearTimeout(timer);
+    dismissTimer.current = setTimeout(onDismiss, VISIBLE_MS);
+    return () => {
+      if (dismissTimer.current) clearTimeout(dismissTimer.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: see comment above
   }, []);
+
+  function handleUndo() {
+    onUndo();
+    setShowUndoAnimation(true);
+
+    if (dismissTimer.current) clearTimeout(dismissTimer.current);
+    dismissTimer.current = setTimeout(onDismiss, UNDO_ANIMATION_MS);
+  }
+
+  if (showUndoAnimation) {
+    return (
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center overflow-hidden px-4"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- a transient local
+            cutout should display at its intrinsic aspect ratio without image
+            optimisation introducing a delay after the Undo tap. */}
+        <img
+          src={UNDO_IMAGE_SRC}
+          alt=""
+          className="animate-undo-rock h-auto max-h-[72vh] w-[min(58vw,260px)] object-contain [transform-origin:50%_100%]"
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -50,10 +84,7 @@ export function UndoToast({ label, onUndo, onDismiss }: UndoToastProps) {
         <span className="font-display text-cream text-19">{label}</span>
         <button
           type="button"
-          onClick={() => {
-            onUndo();
-            onDismiss();
-          }}
+          onClick={handleUndo}
           className="font-display text-ink bg-mango-yellow border-ink rounded-99 min-h-11 cursor-pointer border-3 border-solid px-4 text-17 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-cream"
         >
           Undo
