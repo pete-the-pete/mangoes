@@ -1,5 +1,5 @@
 # mangoes
-Snacking socially
+Snacking socially. It's fun!
 
 ## Local development
 
