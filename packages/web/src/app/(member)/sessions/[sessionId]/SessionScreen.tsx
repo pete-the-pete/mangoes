@@ -55,6 +55,7 @@ export interface SessionScreenProps {
 interface ToastState {
   /** Also the outbox clientEntryId `undo` targets. */
   key: string;
+  itemTypeKey: string;
   label: string;
 }
 
@@ -89,6 +90,7 @@ export function SessionScreen({
       const itemType = itemTypes.find((t) => t.key === matched.itemTypeKey);
       setToast({
         key: matched.clientEntryId,
+        itemTypeKey: matched.itemTypeKey,
         label: itemType ? `${itemType.emoji} ${itemType.label} +1` : "Logged",
       });
     }
@@ -252,6 +254,7 @@ export function SessionScreen({
         <UndoToast
           key={toast.key}
           label={toast.label}
+          showMangoAnimation={toast.itemTypeKey === "mango"}
           onUndo={() => void undo(toast.key)}
           onDismiss={() => setToast(null)}
         />

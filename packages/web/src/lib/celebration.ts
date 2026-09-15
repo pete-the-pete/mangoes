@@ -42,10 +42,10 @@ export const CELEBRATION_WORDS: Record<CelebrationEffect, string> = {
 /**
  * How long the whole effect window lasts before state clears.
  *
- * 1500ms is from the handoff, and it is deliberately longer than the longest
- * single animation (the 1300ms reveal/dance effects) so nothing is cut off.
+ * Long enough for the deliberately relaxed effects, including the final
+ * staggered confetti particle, to finish without being cut off.
  */
-export const CELEBRATION_MS = 1500;
+export const CELEBRATION_MS = 2400;
 
 /** Injectable for tests; matches Math.random's [0, 1) contract. */
 export type RandomSource = () => number;
