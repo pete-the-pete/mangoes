@@ -43,17 +43,20 @@ export function Leaderboard({ itemTypes, participants, aggregate, me }: Leaderbo
     return null;
   }
 
+  const rankedParticipants = [...participants].sort(
+    (a, b) => subjectTotal(aggregate, b.clerkUserId, "mango") - subjectTotal(aggregate, a.clerkUserId, "mango"),
+  );
+
   return (
     <section className="flex flex-col gap-2.5">
       <Label size={12} className="text-rust">
         The leaderboard
       </Label>
 
-      {/* No `layout` animation on these rows, deliberately: the leaderboard is
-          unranked by design (docs/design/README.md rejects a ranked one), so
-          rows never reorder and there is no position change to animate. */}
+      {/* No `layout` animation on these rows: count changes may reorder them,
+          but the motion pass deliberately avoids moving content under a tap. */}
       <Stagger className="flex flex-col gap-2.5">
-      {participants.map((p) => {
+      {rankedParticipants.map((p) => {
         const isMe = p.clerkUserId === me;
         return (
           <Card
